@@ -32,7 +32,7 @@ export OPENROUTER_MODEL="openai/gpt-oss-120b:free"
 Manual input is also supported:
 
 ```bash
-.venv/bin/python main.py --text "a minimal rocket launch icon with a blue flame" --out outputs/manual
+.venv/bin/python main.py --text "a minimal rocket launch icon with a dynamic flame" --out outputs/manual
 .venv/bin/python main.py --interactive --out outputs/manual
 .venv/bin/python main.py --prompt prompts/examples.json --list-cases
 .venv/bin/python main.py --prompt prompts/examples.json --case-id object-rocket,object-coffee-cup --out outputs/selected

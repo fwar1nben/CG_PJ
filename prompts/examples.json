@@ -2,86 +2,85 @@
   {
     "id": "ui-download-cloud",
     "category": "ui",
-    "prompt": "A clean line icon of a cloud with a downward download arrow, friendly blue accent, minimal app style.",
+    "prompt": "A clean line icon of a cloud with a downward download arrow, friendly accent, minimal app style.",
     "style": "line",
     "palette": ["#2563eb", "#dbeafe", "#111827"]
   },
   {
     "id": "ui-lock-shield",
     "category": "ui",
-    "prompt": "A security icon showing a shield with a small lock in the center, confident green accent, rounded corners.",
+    "prompt": "A security icon showing a shield with a small lock in the center, confident accent, rounded corners.",
     "style": "filled",
     "palette": ["#16a34a", "#dcfce7", "#14532d"]
   },
   {
     "id": "ui-calendar-check",
     "category": "ui",
-    "prompt": "A calendar icon with a check mark, compact and readable at small size, red notification accent.",
+    "prompt": "A calendar icon with a check mark, compact and readable at small size, notification accent.",
     "style": "mixed",
     "palette": ["#dc2626", "#fee2e2", "#1f2937"]
   },
   {
     "id": "ui-chat-spark",
     "category": "ui",
-    "prompt": "A chat bubble icon with a small sparkle, optimistic yellow accent, simple product interface style.",
+    "prompt": "A chat bubble icon with a small sparkle, optimistic accent, simple product interface style.",
     "style": "line",
     "palette": ["#f59e0b", "#fef3c7", "#111827"]
   },
   {
     "id": "object-camera",
     "category": "object",
-    "prompt": "A compact camera icon with a lens, top button, and subtle purple accent, balanced geometric design.",
+    "prompt": "A compact camera icon with a lens, top button, and subtle accent, balanced geometric design.",
     "style": "filled",
     "palette": ["#7c3aed", "#ede9fe", "#2e1065"]
   },
   {
     "id": "object-coffee-cup",
     "category": "object",
-    "prompt": "A warm coffee cup icon with steam lines and a small handle, cozy coral accent, no text.",
+    "prompt": "A warm coffee cup icon with steam lines and a small handle, cozy accent, no text.",
     "style": "mixed",
     "palette": ["#f97316", "#ffedd5", "#431407"]
   },
   {
     "id": "object-rocket",
     "category": "object",
-    "prompt": "A playful rocket icon with a round window and flame, energetic cyan and orange accents.",
+    "prompt": "A playful rocket icon with a round window and flame, energetic accents.",
     "style": "filled",
     "palette": ["#0891b2", "#cffafe", "#fb923c"]
   },
   {
     "id": "object-book-pencil",
     "category": "object",
-    "prompt": "An education icon combining an open book and a pencil, calm indigo accent, clear silhouette.",
+    "prompt": "An education icon combining an open book and a pencil, calm accent, clear silhouette.",
     "style": "mixed",
     "palette": ["#4f46e5", "#e0e7ff", "#1e1b4b"]
   },
   {
     "id": "scene-mountain-sun",
     "category": "scene",
-    "prompt": "A tiny landscape icon with mountains, a rising sun, and a simple horizon, fresh teal accent.",
+    "prompt": "A tiny landscape icon with mountains, a rising sun, and a simple horizon, fresh accent.",
     "style": "filled",
     "palette": ["#0f766e", "#ccfbf1", "#134e4a"]
   },
   {
     "id": "scene-city-night",
     "category": "scene",
-    "prompt": "A night city skyline icon with a moon and windows, crisp dark outline and soft blue accent.",
+    "prompt": "A night city skyline icon with a moon and windows, crisp outline and soft accent.",
     "style": "mixed",
     "palette": ["#1d4ed8", "#dbeafe", "#0f172a"]
   },
   {
     "id": "scene-forest-path",
     "category": "scene",
-    "prompt": "A small forest path icon with two trees and a curved trail, natural green palette, calm mood.",
+    "prompt": "A small forest path icon with two trees and a curved trail, natural palette, calm mood.",
     "style": "filled",
     "palette": ["#15803d", "#dcfce7", "#14532d"]
   },
   {
     "id": "scene-lab-planet",
     "category": "scene",
-    "prompt": "A science exploration icon showing a small planet above a lab flask, bright magenta accent.",
+    "prompt": "A science exploration icon showing a small planet above a lab flask, bright accent.",
     "style": "mixed",
     "palette": ["#c026d3", "#fae8ff", "#4a044e"]
   }
 ]
-

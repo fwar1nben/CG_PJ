@@ -112,7 +112,7 @@ class PromptTests(unittest.TestCase):
 
     def test_case_selection_and_manual_prompt_input(self) -> None:
         selected = load_prompts(PROMPT_PATH, case_ids=["object-rocket", "object-coffee-cup"])
-        manual = make_prompt_from_text("a minimal rocket launch icon with a blue flame")
+        manual = make_prompt_from_text("a minimal rocket launch icon with a dynamic flame")
 
         self.assertEqual([item.id for item in selected], ["object-coffee-cup", "object-rocket"])
         self.assertEqual(manual.source, "manual")
@@ -272,7 +272,7 @@ class CliTests(unittest.TestCase):
         self.assertIn("coffee", text)
 
     def test_cli_accepts_manual_text_and_writes_llm_outputs(self) -> None:
-        prompt = "a minimal rocket launch icon with a blue flame"
+        prompt = "a minimal rocket launch icon with a dynamic flame"
         item = make_prompt_from_text(prompt)
         client = FakeOpenRouterClient(
             [

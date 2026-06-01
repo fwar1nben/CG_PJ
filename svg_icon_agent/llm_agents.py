@@ -174,12 +174,11 @@ class OpenRouterRefinerAgent:
 
 
 def _plan_prompt(item: PromptItem) -> str:
-    palette = ", ".join(item.palette)
     return f"""Create a JSON object for a 256x256 SVG icon plan.
 Required keys:
 - category: one of ui, object, scene
 - style: one of line, filled, mixed
-- palette: exactly three #RRGGBB colors
+- palette: exactly three model-chosen #RRGGBB colors
 - motifs: 2 to 6 short lowercase motif tokens
 - layout: short layout name
 - constraints: 4 to 8 short lowercase constraint tokens
@@ -188,13 +187,11 @@ Use this input as the source of truth:
 id: {item.id}
 category hint: {item.category}
 style hint: {item.style}
-palette hint: {palette}
 prompt: {item.prompt}
 """
 
 
 def _svg_prompt(plan: IconPlan) -> str:
-    palette = ", ".join(plan.palette)
     motifs = ", ".join(plan.motifs)
     constraints = ", ".join(plan.constraints)
     return f"""Generate one complete SVG for this icon plan.
@@ -210,7 +207,6 @@ Icon id: {plan.id}
 Prompt: {plan.prompt}
 Category: {plan.category}
 Style: {plan.style}
-Palette: {palette}
 Motifs: {motifs}
 Layout: {plan.layout}
 Constraints: {constraints}
@@ -265,7 +261,6 @@ def _refinement_prompt(
     tool_report: ValidationReport,
     round_index: int,
 ) -> str:
-    palette = ", ".join(plan.palette)
     return f"""Repair the SVG below and return only one complete SVG document.
 Hard requirements:
 - Canvas must be exactly <svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">.
@@ -274,7 +269,6 @@ Hard requirements:
 - Use only literal #RRGGBB colors plus white, black, none, or transparent.
 - Do not use style attributes, classes, defs, filters, gradients, transforms, text, script, image, foreignObject, animation, or external references.
 - Keep 4 to 20 drawing primitives and preserve the prompt semantics.
-- Prefer this palette: {palette}.
 
 Prompt: {plan.prompt}
 Motifs: {", ".join(plan.motifs)}
