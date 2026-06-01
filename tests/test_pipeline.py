@@ -240,6 +240,24 @@ class OpenRouterPipelineTests(unittest.TestCase):
         self.assertIn("rate limited", backend.traces[0].errors[0])
         self.assertEqual(backend.raw_llm_events[0]["debug_payload"]["body"], "try later")
 
+    def test_malformed_planner_json_logs_response_excerpt(self) -> None:
+        item = load_prompts(PROMPT_PATH)[0]
+        malformed = 'The plan is {"category": "ui", "style": "line",}'
+        client = FakeOpenRouterClient([OpenRouterResponse(content=malformed, model="openai/gpt-oss-120b:free")])
+
+        backend = generate_with_backend(
+            [item],
+            backend="openrouter",
+            model="openai/gpt-oss-120b:free",
+            llm_stage="plan-svg",
+            client=client,
+        )
+
+        self.assertEqual(backend.artifacts, [])
+        self.assertEqual(backend.raw_llm_events[0]["status"], "error")
+        self.assertIn("content_excerpt", backend.raw_llm_events[0]["debug_payload"])
+        self.assertIn("category", backend.raw_llm_events[0]["debug_payload"]["content_excerpt"])
+
 
 class CliTests(unittest.TestCase):
     def test_cli_lists_prompt_cases_without_openrouter(self) -> None:

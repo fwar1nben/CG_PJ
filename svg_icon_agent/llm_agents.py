@@ -61,7 +61,7 @@ class OpenRouterPlannerAgent:
             temperature=0.2,
             max_tokens=900,
         )
-        data = _json_object(response.content)
+        data = _json_object(response.content, "Planner")
         return LlmPlanResult(plan=_coerce_plan(item, data), response=response)
 
 
@@ -128,7 +128,7 @@ class OpenRouterValidatorAgent:
             temperature=0.1,
             max_tokens=1200,
         )
-        data = _json_object(response.content)
+        data = _json_object(response.content, "Validator")
         return LlmValidationResult(
             report=_coerce_validation_report(artifact, data, tool_report),
             response=response,
@@ -292,21 +292,45 @@ Current SVG:
 """
 
 
-def _json_object(content: str) -> dict[str, Any]:
+def _json_object(content: str, label: str) -> dict[str, Any]:
     cleaned = _strip_fence(content)
     try:
         data = json.loads(cleaned)
-    except json.JSONDecodeError:
-        match = re.search(r"\{.*\}", cleaned, flags=re.DOTALL)
-        if not match:
-            raise OpenRouterError("Planner response did not contain a JSON object.")
-        try:
-            data = json.loads(match.group(0))
-        except json.JSONDecodeError as exc:
-            raise OpenRouterError("Planner response JSON was malformed.") from exc
+    except json.JSONDecodeError as first_exc:
+        data = _first_json_object(cleaned)
+        if data is None:
+            message = (
+                f"{label} response did not contain a JSON object."
+                if "{" not in cleaned
+                else f"{label} response JSON was malformed."
+            )
+            raise OpenRouterError(
+                message,
+                debug_payload={
+                    "content_excerpt": cleaned[:4000],
+                    "json_error": str(first_exc),
+                },
+            ) from first_exc
     if not isinstance(data, dict):
-        raise OpenRouterError("Planner response JSON must be an object.")
+        raise OpenRouterError(
+            f"{label} response JSON must be an object.",
+            debug_payload={"content_excerpt": cleaned[:4000]},
+        )
     return data
+
+
+def _first_json_object(cleaned: str) -> dict[str, Any] | None:
+    decoder = json.JSONDecoder()
+    for index, char in enumerate(cleaned):
+        if char != "{":
+            continue
+        try:
+            data, _ = decoder.raw_decode(cleaned[index:])
+        except json.JSONDecodeError:
+            continue
+        if isinstance(data, dict):
+            return data
+    return None
 
 
 def _coerce_plan(item: PromptItem, data: dict[str, Any]) -> IconPlan:
