@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SVG Icon Agent prompt list",
+  "type": "array",
+  "minItems": 1,
+  "items": {
+    "type": "object",
+    "required": ["id", "category", "prompt", "style", "palette"],
+    "additionalProperties": false,
+    "properties": {
+      "id": {
+        "type": "string",
+        "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+      },
+      "category": {
+        "type": "string",
+        "enum": ["ui", "object", "scene"]
+      },
+      "prompt": {
+        "type": "string",
+        "minLength": 20
+      },
+      "style": {
+        "type": "string",
+        "enum": ["line", "filled", "mixed"]
+      },
+      "palette": {
+        "type": "array",
+        "minItems": 3,
+        "maxItems": 3,
+        "items": {
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}$"
+        }
+      }
+    }
+  }
+}
+
