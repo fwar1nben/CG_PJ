@@ -6,6 +6,7 @@ import argparse
 import json
 from pathlib import Path
 
+from svg_icon_agent.exporter import export_artifacts
 from svg_icon_agent.generator import SvgGeneratorAgent
 from svg_icon_agent.planner import plan_prompts
 from svg_icon_agent.prompts import load_prompts
@@ -61,11 +62,21 @@ def main(argv: list[str] | None = None) -> int:
         json.dumps([result.to_json() for result in refinements], indent=2),
         encoding="utf-8",
     )
+    summary = export_artifacts(
+        output_dir=output_dir,
+        prompts=prompts,
+        baseline_artifacts=artifacts,
+        refined_artifacts=refined_artifacts,
+        baseline_reports=reports,
+        refined_reports=refined_reports,
+        refinements=refinements,
+    )
     valid_count = sum(report.is_valid for report in reports)
     refined_valid_count = sum(report.is_valid for report in refined_reports)
     print(
         f"Generated {len(artifacts)} baseline SVG icons in {baseline_dir}. "
         f"Validator accepted {valid_count}/{len(reports)} baseline and "
-        f"{refined_valid_count}/{len(refined_reports)} refined icons."
+        f"{refined_valid_count}/{len(refined_reports)} refined icons. "
+        f"Average score improved by {summary['average_score_delta']}."
     )
     return 0
