@@ -9,6 +9,7 @@ from pathlib import Path
 from svg_icon_agent.generator import SvgGeneratorAgent
 from svg_icon_agent.planner import plan_prompts
 from svg_icon_agent.prompts import load_prompts
+from svg_icon_agent.validator import validate_artifacts
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -33,10 +34,19 @@ def main(argv: list[str] | None = None) -> int:
 
     for artifact in artifacts:
         (baseline_dir / f"{artifact.id}.svg").write_text(artifact.svg, encoding="utf-8")
+    reports = validate_artifacts(artifacts)
 
     (output_dir / "plans.json").write_text(
         json.dumps([plan.to_json() for plan in plans], indent=2),
         encoding="utf-8",
     )
-    print(f"Generated {len(artifacts)} baseline SVG icons in {baseline_dir}.")
+    (output_dir / "baseline_validation.json").write_text(
+        json.dumps([report.to_json() for report in reports], indent=2),
+        encoding="utf-8",
+    )
+    valid_count = sum(report.is_valid for report in reports)
+    print(
+        f"Generated {len(artifacts)} baseline SVG icons in {baseline_dir}. "
+        f"Validator accepted {valid_count}/{len(reports)}."
+    )
     return 0
