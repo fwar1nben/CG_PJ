@@ -49,6 +49,7 @@ Useful output files:
 - `outputs/metrics.json`: aggregate validity and score improvements.
 - `outputs/refinement_history.json`: per-icon repair logs.
 - `outputs/llm_trace.json`: backend, model, usage, fallback reason, and score trace.
+- `outputs/llm_raw_responses.jsonl`: sanitized raw OpenRouter responses and error payloads.
 
 ## Pipeline
 

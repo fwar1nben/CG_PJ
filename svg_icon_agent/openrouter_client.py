@@ -18,6 +18,10 @@ DEFAULT_MAX_RETRIES = 2
 class OpenRouterError(RuntimeError):
     """Raised when OpenRouter cannot return a usable response."""
 
+    def __init__(self, message: str, debug_payload: dict[str, Any] | None = None) -> None:
+        super().__init__(message)
+        self.debug_payload = debug_payload or {}
+
 
 @dataclass(frozen=True)
 class OpenRouterConfig:
@@ -54,6 +58,7 @@ class OpenRouterResponse:
     content: str
     model: str
     usage: dict[str, Any] = field(default_factory=dict)
+    raw: dict[str, Any] = field(default_factory=dict)
 
     def trace(self) -> dict[str, Any]:
         return {
@@ -104,7 +109,10 @@ class OpenRouterClient:
                 if attempt < self.config.max_retries:
                     time.sleep(0.5 * (attempt + 1))
                     continue
-                raise OpenRouterError(f"OpenRouter request failed: {exc}") from exc
+                raise OpenRouterError(
+                    f"OpenRouter request failed: {exc}",
+                    debug_payload={"error_type": type(exc).__name__, "message": str(exc)},
+                ) from exc
 
             if response.status_code in {408, 409, 425, 429} or response.status_code >= 500:
                 if attempt < self.config.max_retries:
@@ -112,7 +120,11 @@ class OpenRouterClient:
                     continue
             if response.status_code >= 400:
                 raise OpenRouterError(
-                    f"OpenRouter returned HTTP {response.status_code}: {_safe_response_text(response)}"
+                    f"OpenRouter returned HTTP {response.status_code}: {_safe_response_text(response)}",
+                    debug_payload={
+                        "status_code": response.status_code,
+                        "body": _safe_response_text(response),
+                    },
                 )
 
             data = _response_json(response)
@@ -121,17 +133,27 @@ class OpenRouterClient:
                 message = choice["message"]
                 content = message["content"]
             except (KeyError, IndexError, TypeError) as exc:
-                raise OpenRouterError("OpenRouter response did not contain choices[0].message.content.") from exc
+                raise OpenRouterError(
+                    "OpenRouter response did not contain choices[0].message.content.",
+                    debug_payload=_sanitize_payload(data),
+                ) from exc
             if not isinstance(content, str) or not content.strip():
-                raise OpenRouterError("OpenRouter returned an empty message.")
+                raise OpenRouterError(
+                    "OpenRouter returned an empty message.",
+                    debug_payload=_sanitize_payload(data),
+                )
 
             return OpenRouterResponse(
                 content=content.strip(),
                 model=str(data.get("model") or self.config.model),
                 usage=data.get("usage") if isinstance(data.get("usage"), dict) else {},
+                raw=_sanitize_payload(data),
             )
 
-        raise OpenRouterError(f"OpenRouter request failed after retries: {last_error}")
+        raise OpenRouterError(
+            f"OpenRouter request failed after retries: {last_error}",
+            debug_payload={"error": str(last_error) if last_error else "unknown"},
+        )
 
     def _headers(self) -> dict[str, str]:
         headers = {
@@ -152,7 +174,10 @@ def _response_json(response: requests.Response) -> dict[str, Any]:
     try:
         data = response.json()
     except ValueError as exc:
-        raise OpenRouterError("OpenRouter response was not valid JSON.") from exc
+        raise OpenRouterError(
+            "OpenRouter response was not valid JSON.",
+            debug_payload={"status_code": response.status_code, "body": _safe_response_text(response)},
+        ) from exc
     if not isinstance(data, dict):
         raise OpenRouterError("OpenRouter response JSON must be an object.")
     return data
@@ -161,3 +186,14 @@ def _response_json(response: requests.Response) -> dict[str, Any]:
 def _safe_response_text(response: requests.Response) -> str:
     text = response.text.strip().replace(os.environ.get("OPENROUTER_API_KEY", ""), "")
     return text[:500] if text else "<empty response>"
+
+
+def _sanitize_payload(value: Any) -> Any:
+    api_key = os.environ.get("OPENROUTER_API_KEY", "")
+    if isinstance(value, dict):
+        return {str(key): _sanitize_payload(item) for key, item in value.items() if str(key).lower() != "authorization"}
+    if isinstance(value, list):
+        return [_sanitize_payload(item) for item in value]
+    if isinstance(value, str):
+        return value.replace(api_key, "[REDACTED]") if api_key else value
+    return value

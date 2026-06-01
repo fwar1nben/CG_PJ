@@ -121,6 +121,10 @@ def main(argv: list[str] | None = None) -> int:
         ),
         encoding="utf-8",
     )
+    (output_dir / "llm_raw_responses.jsonl").write_text(
+        "".join(json.dumps(event, ensure_ascii=False) + "\n" for event in backend_result.raw_llm_events),
+        encoding="utf-8",
+    )
     progress.log("Exporting PNG previews and gallery.")
     summary = export_artifacts(
         output_dir=output_dir,

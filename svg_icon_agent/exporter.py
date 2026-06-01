@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import html
 import json
-import math
 import re
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -17,6 +16,7 @@ from svg_icon_agent.prompts import PromptItem
 from svg_icon_agent.refiner import RefinementResult
 
 CANVAS = 256
+PATH_TOKEN_RE = re.compile(r"[AaCcHhLlMmQqSsTtVvZz]|[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?")
 
 
 def export_artifacts(
@@ -248,53 +248,116 @@ def _gallery_html(
 
 
 def _path_points(d: str) -> tuple[list[tuple[float, float]], bool]:
-    tokens = re.findall(r"[MLHVCSZmlhvcsz]|-?\d+(?:\.\d+)?", d)
+    tokens = PATH_TOKEN_RE.findall(d)
     points: list[tuple[float, float]] = []
     current = (0.0, 0.0)
     start = (0.0, 0.0)
     command = ""
+    previous_quad_control: tuple[float, float] | None = None
     i = 0
     closed = False
     while i < len(tokens):
         token = tokens[i]
         if token.isalpha():
-            command = token.upper()
+            command = token
             i += 1
-            if command == "Z":
+            if command.upper() == "Z":
                 closed = True
+                current = start
                 points.append(start)
             continue
-        if command == "M":
-            current = (float(tokens[i]), float(tokens[i + 1]))
+
+        op = command.upper()
+        relative = command.islower()
+        if op == "M" and _has_numbers(tokens, i, 2):
+            current = _resolve_point(current, float(tokens[i]), float(tokens[i + 1]), relative)
             start = current
             points.append(current)
             i += 2
-            command = "L"
-        elif command == "L":
-            current = (float(tokens[i]), float(tokens[i + 1]))
+            command = "l" if relative else "L"
+            previous_quad_control = None
+        elif op == "L" and _has_numbers(tokens, i, 2):
+            current = _resolve_point(current, float(tokens[i]), float(tokens[i + 1]), relative)
             points.append(current)
             i += 2
-        elif command == "H":
-            current = (float(tokens[i]), current[1])
+            previous_quad_control = None
+        elif op == "H" and _has_numbers(tokens, i, 1):
+            x = current[0] + float(tokens[i]) if relative else float(tokens[i])
+            current = (x, current[1])
             points.append(current)
             i += 1
-        elif command == "V":
-            current = (current[0], float(tokens[i]))
+            previous_quad_control = None
+        elif op == "V" and _has_numbers(tokens, i, 1):
+            y = current[1] + float(tokens[i]) if relative else float(tokens[i])
+            current = (current[0], y)
             points.append(current)
             i += 1
-        elif command == "C":
+            previous_quad_control = None
+        elif op == "C" and _has_numbers(tokens, i, 6):
             p0 = current
-            p1 = (float(tokens[i]), float(tokens[i + 1]))
-            p2 = (float(tokens[i + 2]), float(tokens[i + 3]))
-            p3 = (float(tokens[i + 4]), float(tokens[i + 5]))
+            p1 = _resolve_point(current, float(tokens[i]), float(tokens[i + 1]), relative)
+            p2 = _resolve_point(current, float(tokens[i + 2]), float(tokens[i + 3]), relative)
+            p3 = _resolve_point(current, float(tokens[i + 4]), float(tokens[i + 5]), relative)
             for step in range(1, 15):
                 t = step / 14
                 points.append(_cubic(p0, p1, p2, p3, t))
             current = p3
             i += 6
+            previous_quad_control = None
+        elif op == "S" and _has_numbers(tokens, i, 4):
+            current = _resolve_point(current, float(tokens[i + 2]), float(tokens[i + 3]), relative)
+            points.append(current)
+            i += 4
+            previous_quad_control = None
+        elif op == "Q" and _has_numbers(tokens, i, 4):
+            p0 = current
+            p1 = _resolve_point(current, float(tokens[i]), float(tokens[i + 1]), relative)
+            p2 = _resolve_point(current, float(tokens[i + 2]), float(tokens[i + 3]), relative)
+            for step in range(1, 13):
+                t = step / 12
+                points.append(_quadratic(p0, p1, p2, t))
+            current = p2
+            previous_quad_control = p1
+            i += 4
+        elif op == "T" and _has_numbers(tokens, i, 2):
+            p0 = current
+            reflected = (
+                (2 * current[0] - previous_quad_control[0], 2 * current[1] - previous_quad_control[1])
+                if previous_quad_control is not None
+                else current
+            )
+            p2 = _resolve_point(current, float(tokens[i]), float(tokens[i + 1]), relative)
+            for step in range(1, 13):
+                t = step / 12
+                points.append(_quadratic(p0, reflected, p2, t))
+            current = p2
+            previous_quad_control = reflected
+            i += 2
+        elif op == "A" and _has_numbers(tokens, i, 7):
+            current = _resolve_point(current, float(tokens[i + 5]), float(tokens[i + 6]), relative)
+            points.append(current)
+            i += 7
+            previous_quad_control = None
+        elif token.isalpha():
+            previous_quad_control = None
         else:
-            break
+            i += 1
     return points, closed
+
+
+def _has_numbers(tokens: list[str], index: int, count: int) -> bool:
+    return index + count <= len(tokens) and all(not tokens[index + offset].isalpha() for offset in range(count))
+
+
+def _resolve_point(
+    current: tuple[float, float],
+    x: float,
+    y: float,
+    relative: bool,
+) -> tuple[float, float]:
+    if relative:
+        return (current[0] + x, current[1] + y)
+    return (x, y)
 
 
 def _cubic(
@@ -307,6 +370,18 @@ def _cubic(
     mt = 1 - t
     x = mt**3 * p0[0] + 3 * mt**2 * t * p1[0] + 3 * mt * t**2 * p2[0] + t**3 * p3[0]
     y = mt**3 * p0[1] + 3 * mt**2 * t * p1[1] + 3 * mt * t**2 * p2[1] + t**3 * p3[1]
+    return x, y
+
+
+def _quadratic(
+    p0: tuple[float, float],
+    p1: tuple[float, float],
+    p2: tuple[float, float],
+    t: float,
+) -> tuple[float, float]:
+    mt = 1 - t
+    x = mt**2 * p0[0] + 2 * mt * t * p1[0] + t**2 * p2[0]
+    y = mt**2 * p0[1] + 2 * mt * t * p1[1] + t**2 * p2[1]
     return x, y
 
 
@@ -338,4 +413,3 @@ def _local_name(tag: str) -> str:
     if "}" in tag:
         return tag.rsplit("}", 1)[1]
     return tag
-

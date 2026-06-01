@@ -13,6 +13,7 @@ from pathlib import Path
 
 from svg_icon_agent.backends import generate_with_backend
 from svg_icon_agent.cli import main
+from svg_icon_agent.exporter import render_svg_to_png
 from svg_icon_agent.generator import SvgGeneratorAgent
 from svg_icon_agent.llm_agents import OpenRouterPlannerAgent
 from svg_icon_agent.openrouter_client import OpenRouterError, OpenRouterResponse
@@ -93,6 +94,21 @@ class PipelineTests(unittest.TestCase):
             self.assertIn("Loading prompts", text)
             self.assertIn("Pipeline complete", text)
 
+    def test_png_renderer_handles_llm_path_commands(self) -> None:
+        svg = """<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <title>Path Commands</title>
+  <desc>Uses relative arc, horizontal, and quadratic path commands.</desc>
+  <path d="M80 120 a40 40 0 0 1 80 0 h20 a30 30 0 0 1 0 60 h-120 a30 30 0 0 1 0 -60 z" fill="none" stroke="#2563eb" stroke-width="8"/>
+  <path d="M70 210 q58 -40 116 0" fill="none" stroke="#111827" stroke-width="6"/>
+</svg>"""
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp) / "preview.png"
+
+            render_svg_to_png(svg, output)
+
+            self.assertTrue(output.exists())
+            self.assertGreater(output.stat().st_size, 0)
+
 
 class OpenRouterBackendTests(unittest.TestCase):
     def test_openrouter_planner_json_converts_to_icon_plan(self) -> None:
@@ -150,11 +166,13 @@ class OpenRouterBackendTests(unittest.TestCase):
                     ),
                     model="openai/gpt-oss-120b:free",
                     usage={"prompt_tokens": 1},
+                    raw={"choices": [{"message": {"content": "plan-json"}}]},
                 ),
                 OpenRouterResponse(
                     content=svg,
                     model="openai/gpt-oss-120b:free",
                     usage={"completion_tokens": 1},
+                    raw={"choices": [{"message": {"content": svg}}]},
                 ),
             ]
         )
@@ -171,11 +189,13 @@ class OpenRouterBackendTests(unittest.TestCase):
 
         self.assertEqual(backend.traces[0].planner_backend, "openrouter")
         self.assertEqual(backend.traces[0].svg_backend, "openrouter")
+        self.assertEqual([event["stage"] for event in backend.raw_llm_events], ["planner", "svg"])
+        self.assertEqual(backend.raw_llm_events[1]["response"]["choices"][0]["message"]["content"], svg)
         self.assertTrue(refined_reports[0].is_valid)
 
     def test_openrouter_failures_fall_back_to_rule_backend(self) -> None:
         item = load_prompts(PROMPT_PATH)[0]
-        client = FakeOpenRouterClient([OpenRouterError("rate limited")])
+        client = FakeOpenRouterClient([OpenRouterError("rate limited", debug_payload={"body": "try later"})])
 
         backend = generate_with_backend(
             [item],
@@ -188,6 +208,7 @@ class OpenRouterBackendTests(unittest.TestCase):
         self.assertEqual(backend.traces[0].planner_backend, "rule")
         self.assertEqual(backend.traces[0].svg_backend, "rule")
         self.assertIn("llm-plan-failed", backend.traces[0].fallback_reason)
+        self.assertEqual(backend.raw_llm_events[0]["debug_payload"]["body"], "try later")
         self.assertIn("data-prompt", backend.artifacts[0].svg)
 
     def test_invalid_llm_svg_falls_back_to_rule_svg(self) -> None:
