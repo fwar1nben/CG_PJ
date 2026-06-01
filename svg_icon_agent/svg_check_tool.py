@@ -1,4 +1,4 @@
-"""Validator agent for SVG structure, safety, and simple design rules."""
+"""Deterministic SVG syntax and safety checks used as local tools."""
 
 from __future__ import annotations
 
@@ -27,10 +27,10 @@ NUMERIC_RE = re.compile(r"^\d+(\.\d+)?$")
 SAFE_NAMED_COLORS = {"none", "white", "black", "transparent", "currentColor"}
 
 
-class ValidatorAgent:
-    """Checks SVG files before they are accepted as refined artifacts."""
+class SvgCheckTool:
+    """Runs deterministic machine checks; it is not an agent."""
 
-    def validate(self, artifact: SvgArtifact) -> ValidationReport:
+    def check(self, artifact: SvgArtifact) -> ValidationReport:
         issues: list[ValidationIssue] = []
         try:
             root = ET.fromstring(artifact.svg)
@@ -55,9 +55,9 @@ class ValidatorAgent:
         height = root.attrib.get("height")
         view_box = root.attrib.get("viewBox")
         if width != "256" or height != "256":
-            issues.append(_issue("canvas-size", "error", "SVG must use width=\"256\" height=\"256\"."))
+            issues.append(_issue("canvas-size", "error", 'SVG must use width="256" height="256".'))
         if view_box != "0 0 256 256":
-            issues.append(_issue("missing-viewbox", "error", "SVG must include viewBox=\"0 0 256 256\"."))
+            issues.append(_issue("missing-viewbox", "error", 'SVG must include viewBox="0 0 256 256".'))
 
         title_count = 0
         desc_count = 0
@@ -77,7 +77,7 @@ class ValidatorAgent:
             if tag in DRAWING_TAGS:
                 drawing_count += 1
             for attr_name, attr_value in element.attrib.items():
-                _validate_attribute(attr_name, attr_value, issues, colors)
+                _check_attribute(attr_name, attr_value, issues, colors)
 
         if title_count == 0:
             issues.append(_issue("missing-title", "warning", "Add a <title> for accessibility and report clarity."))
@@ -90,21 +90,20 @@ class ValidatorAgent:
         if len(colors) < 2:
             issues.append(_issue("limited-palette", "warning", "Icon should use at least two visible colors."))
 
-        score = _score(issues)
         return ValidationReport(
             id=artifact.id,
             stage=artifact.stage,
-            score=score,
+            score=_score(issues),
             issues=tuple(issues),
         )
 
 
-def validate_artifacts(artifacts: list[SvgArtifact]) -> list[ValidationReport]:
-    validator = ValidatorAgent()
-    return [validator.validate(artifact) for artifact in artifacts]
+def check_artifacts(artifacts: list[SvgArtifact]) -> list[ValidationReport]:
+    checker = SvgCheckTool()
+    return [checker.check(artifact) for artifact in artifacts]
 
 
-def _validate_attribute(
+def _check_attribute(
     attr_name: str,
     attr_value: str,
     issues: list[ValidationIssue],
@@ -143,4 +142,3 @@ def _local_name(tag: str) -> str:
 
 def _issue(code: str, severity: str, message: str) -> ValidationIssue:
     return ValidationIssue(code=code, severity=severity, message=message)
-

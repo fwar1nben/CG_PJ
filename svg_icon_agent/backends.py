@@ -1,11 +1,10 @@
-"""Backend selection and fallback orchestration."""
+"""OpenRouter backend orchestration for LLM-backed icon generation."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Any
 
-from svg_icon_agent.generator import SvgGeneratorAgent
 from svg_icon_agent.llm_agents import OpenRouterPlannerAgent, OpenRouterSvgGeneratorAgent
 from svg_icon_agent.models import IconPlan, SvgArtifact, ValidationReport
 from svg_icon_agent.openrouter_client import (
@@ -13,12 +12,9 @@ from svg_icon_agent.openrouter_client import (
     OpenRouterClient,
     OpenRouterConfig,
     OpenRouterError,
-    has_openrouter_key,
 )
-from svg_icon_agent.planner import PlannerAgent
 from svg_icon_agent.progress import ProgressLogger
 from svg_icon_agent.prompts import PromptItem
-from svg_icon_agent.validator import ValidatorAgent
 
 
 @dataclass
@@ -27,10 +23,13 @@ class BackendTrace:
     requested_backend: str
     model: str
     llm_stage: str
-    planner_backend: str = "rule"
-    svg_backend: str = "rule"
+    planner_backend: str = "not-run"
+    svg_backend: str = "not-run"
+    validator_backend: str = "not-run"
+    refiner_backend: str = "not-run"
     fallback_reason: str | None = None
     usage: dict[str, Any] = field(default_factory=dict)
+    errors: list[str] = field(default_factory=list)
 
     def to_json(
         self,
@@ -44,8 +43,11 @@ class BackendTrace:
             "llm_stage": self.llm_stage,
             "planner_backend": self.planner_backend,
             "svg_backend": self.svg_backend,
+            "validator_backend": self.validator_backend,
+            "refiner_backend": self.refiner_backend,
             "fallback_reason": self.fallback_reason,
             "usage": self.usage,
+            "errors": self.errors,
         }
         if baseline_report is not None:
             data["baseline_score"] = baseline_report.score
@@ -67,6 +69,21 @@ class BackendResult:
     raw_llm_events: list[dict[str, Any]] = field(default_factory=list)
 
 
+def create_openrouter_client(
+    *,
+    model: str | None = None,
+    request_timeout: float | None = None,
+    max_retries: int | None = None,
+) -> OpenRouterClient:
+    return OpenRouterClient(
+        OpenRouterConfig.from_env(
+            model=model or DEFAULT_OPENROUTER_MODEL,
+            timeout=request_timeout,
+            max_retries=max_retries,
+        )
+    )
+
+
 def generate_with_backend(
     prompts: list[PromptItem],
     *,
@@ -78,27 +95,18 @@ def generate_with_backend(
     max_retries: int | None = None,
     progress: ProgressLogger | None = None,
 ) -> BackendResult:
+    if backend != "openrouter":
+        raise ValueError("Only the OpenRouter backend is supported; local rule generation has been removed.")
+    if llm_stage != "plan-svg":
+        raise ValueError("Only llm_stage=plan-svg is supported because SVG generation must be model-backed.")
+
     model_name = model or DEFAULT_OPENROUTER_MODEL
     logger = progress or ProgressLogger(verbose=False)
-    logger.log(f"Selecting backend={backend}, model={model_name}, llm_stage={llm_stage}.")
-    if backend == "rule":
-        logger.log("Using deterministic rule backend.")
-        return _rule_backend(prompts, backend, model_name, llm_stage)
-    if backend == "auto" and client is None and not has_openrouter_key():
-        logger.log("OPENROUTER_API_KEY is not set; auto backend falls back to rules.")
-        return _rule_backend(prompts, backend, model_name, llm_stage, "auto-no-api-key")
-
-    try:
-        openrouter_client = client or OpenRouterClient(
-            OpenRouterConfig.from_env(
-                model=model_name,
-                timeout=request_timeout,
-                max_retries=max_retries,
-            )
-        )
-    except OpenRouterError as exc:
-        logger.log(f"OpenRouter setup failed; falling back to rules: {exc}")
-        return _rule_backend(prompts, backend, model_name, llm_stage, str(exc))
+    openrouter_client = client or create_openrouter_client(
+        model=model_name,
+        request_timeout=request_timeout,
+        max_retries=max_retries,
+    )
 
     timeout = getattr(getattr(openrouter_client, "config", None), "timeout", request_timeout)
     retries = getattr(getattr(openrouter_client, "config", None), "max_retries", max_retries)
@@ -113,30 +121,6 @@ def generate_with_backend(
     )
 
 
-def _rule_backend(
-    prompts: list[PromptItem],
-    requested_backend: str,
-    model: str,
-    llm_stage: str,
-    fallback_reason: str | None = None,
-) -> BackendResult:
-    planner = PlannerAgent()
-    generator = SvgGeneratorAgent()
-    plans = [planner.plan(item) for item in prompts]
-    artifacts = [generator.generate(plan) for plan in plans]
-    traces = [
-        BackendTrace(
-            id=item.id,
-            requested_backend=requested_backend,
-            model=model,
-            llm_stage=llm_stage,
-            fallback_reason=fallback_reason,
-        )
-        for item in prompts
-    ]
-    return BackendResult(plans=plans, artifacts=artifacts, traces=traces, active_backend="rule")
-
-
 def _openrouter_backend(
     prompts: list[PromptItem],
     *,
@@ -146,9 +130,6 @@ def _openrouter_backend(
     client: OpenRouterClient,
     progress: ProgressLogger,
 ) -> BackendResult:
-    rule_planner = PlannerAgent()
-    rule_generator = SvgGeneratorAgent()
-    validator = ValidatorAgent()
     llm_planner = OpenRouterPlannerAgent(client)
     llm_generator = OpenRouterSvgGeneratorAgent(client)
 
@@ -159,61 +140,48 @@ def _openrouter_backend(
 
     total = len(prompts)
     for index, item in enumerate(prompts, start=1):
-        progress.log(f"[{index}/{total}] {item.id}: starting OpenRouter planning.")
+        progress.log(f"[{index}/{total}] {item.id}: requesting LLM plan.")
         trace = BackendTrace(
             id=item.id,
             requested_backend=requested_backend,
             model=model,
             llm_stage=llm_stage,
         )
-        rule_plan = rule_planner.plan(item)
-        plan = rule_plan
-        artifact: SvgArtifact | None = None
 
         try:
             plan_result = llm_planner.plan(item)
         except OpenRouterError as exc:
-            trace.fallback_reason = f"llm-plan-failed: {exc}"
+            trace.planner_backend = "openrouter-error"
+            trace.errors.append(f"planner: {exc}")
             raw_events.append(_raw_event(item.id, "planner", "error", model, error=exc))
-            artifact = rule_generator.generate(rule_plan)
-            progress.log(f"[{index}/{total}] {item.id}: planner failed, using rule fallback.")
-        else:
-            plan = plan_result.plan
-            trace.planner_backend = "openrouter"
-            trace.usage["planner"] = plan_result.response.usage
-            raw_events.append(_raw_event(item.id, "planner", "success", model, response=plan_result.response.raw))
-            progress.log(f"[{index}/{total}] {item.id}: planner done.")
+            traces.append(trace)
+            progress.log(f"[{index}/{total}] {item.id}: LLM planner failed; no local fallback generated.")
+            continue
 
-        if artifact is None and llm_stage == "plan-svg":
-            progress.log(f"[{index}/{total}] {item.id}: requesting OpenRouter SVG draft.")
-            try:
-                svg_result = llm_generator.generate(plan)
-                draft_report = validator.validate(svg_result.artifact)
-                if not draft_report.is_valid:
-                    issue_codes = ",".join(issue.code for issue in draft_report.issues if issue.severity == "error")
-                    raise OpenRouterError(f"llm-svg-validation-error: {issue_codes}")
-            except OpenRouterError as exc:
-                trace.fallback_reason = f"llm-svg-failed: {exc}"
-                raw_events.append(_raw_event(item.id, "svg", "error", model, error=exc))
-                artifact = rule_generator.generate(plan)
-                progress.log(f"[{index}/{total}] {item.id}: SVG draft failed validation/request, using rule fallback.")
-            else:
-                artifact = svg_result.artifact
-                trace.svg_backend = "openrouter"
-                trace.usage["svg"] = svg_result.response.usage
-                raw_events.append(_raw_event(item.id, "svg", "success", model, response=svg_result.response.raw))
-                progress.log(f"[{index}/{total}] {item.id}: SVG draft accepted by validator.")
-        elif artifact is None:
-            progress.log(f"[{index}/{total}] {item.id}: llm_stage=plan, generating SVG with rule backend.")
-            artifact = rule_generator.generate(plan)
-
+        plan = plan_result.plan
         plans.append(plan)
-        artifacts.append(artifact)
+        trace.planner_backend = "openrouter"
+        trace.usage["planner"] = plan_result.response.usage
+        raw_events.append(_raw_event(item.id, "planner", "success", model, response=plan_result.response.raw))
+        progress.log(f"[{index}/{total}] {item.id}: LLM plan ready.")
+
+        progress.log(f"[{index}/{total}] {item.id}: requesting LLM SVG draft.")
+        try:
+            svg_result = llm_generator.generate(plan)
+        except OpenRouterError as exc:
+            trace.svg_backend = "openrouter-error"
+            trace.errors.append(f"svg: {exc}")
+            raw_events.append(_raw_event(item.id, "svg", "error", model, error=exc))
+            traces.append(trace)
+            progress.log(f"[{index}/{total}] {item.id}: LLM SVG draft failed; no local fallback generated.")
+            continue
+
+        artifacts.append(svg_result.artifact)
+        trace.svg_backend = "openrouter"
+        trace.usage["svg"] = svg_result.response.usage
+        raw_events.append(_raw_event(item.id, "svg", "success", model, response=svg_result.response.raw))
         traces.append(trace)
-        progress.log(
-            f"[{index}/{total}] {item.id}: baseline ready "
-            f"(plan={trace.planner_backend}, svg={trace.svg_backend})."
-        )
+        progress.log(f"[{index}/{total}] {item.id}: baseline SVG draft ready.")
 
     return BackendResult(
         plans=plans,

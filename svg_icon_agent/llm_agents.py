@@ -1,4 +1,4 @@
-"""OpenRouter-backed planner and SVG draft agents."""
+"""OpenRouter-backed agents for the SVG icon pipeline."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
-from svg_icon_agent.models import IconPlan, SvgArtifact
+from svg_icon_agent.models import IconPlan, SvgArtifact, ValidationIssue, ValidationReport
 from svg_icon_agent.openrouter_client import OpenRouterClient, OpenRouterError, OpenRouterResponse
 from svg_icon_agent.prompts import HEX_RE, PromptItem, VALID_CATEGORIES, VALID_STYLES
 
@@ -20,6 +20,18 @@ class LlmPlanResult:
 
 @dataclass(frozen=True)
 class LlmSvgResult:
+    artifact: SvgArtifact
+    response: OpenRouterResponse
+
+
+@dataclass(frozen=True)
+class LlmValidationResult:
+    report: ValidationReport
+    response: OpenRouterResponse
+
+
+@dataclass(frozen=True)
+class LlmRefinementResult:
     artifact: SvgArtifact
     response: OpenRouterResponse
 
@@ -83,6 +95,84 @@ class OpenRouterSvgGeneratorAgent:
         )
 
 
+class OpenRouterValidatorAgent:
+    """Uses an OpenRouter model to judge SVG semantics, aesthetics, and rule fit."""
+
+    def __init__(self, client: OpenRouterClient) -> None:
+        self.client = client
+
+    def validate(
+        self,
+        plan: IconPlan,
+        artifact: SvgArtifact,
+        tool_report: ValidationReport,
+        *,
+        round_index: int = 0,
+    ) -> LlmValidationResult:
+        response = self.client.chat(
+            [
+                {
+                    "role": "system",
+                    "content": (
+                        "You are an SVG icon validator agent. Return only JSON. "
+                        "Judge semantic alignment, visual clarity, editability, and safety. "
+                        "Treat the deterministic tool report as evidence, but make your own concise judgment."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": _validation_prompt(plan, artifact, tool_report, round_index),
+                },
+            ],
+            response_format={"type": "json_object"},
+            temperature=0.1,
+            max_tokens=1200,
+        )
+        data = _json_object(response.content)
+        return LlmValidationResult(
+            report=_coerce_validation_report(artifact, data, tool_report),
+            response=response,
+        )
+
+
+class OpenRouterRefinerAgent:
+    """Uses an OpenRouter model to return a repaired complete SVG document."""
+
+    def __init__(self, client: OpenRouterClient) -> None:
+        self.client = client
+
+    def refine(
+        self,
+        plan: IconPlan,
+        artifact: SvgArtifact,
+        validation_report: ValidationReport,
+        tool_report: ValidationReport,
+        *,
+        round_index: int,
+    ) -> LlmRefinementResult:
+        response = self.client.chat(
+            [
+                {
+                    "role": "system",
+                    "content": (
+                        "You are an SVG repair agent. Return only one complete SVG document. "
+                        "Do not include markdown, explanations, scripts, images, external assets, CSS, or animations."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": _refinement_prompt(plan, artifact, validation_report, tool_report, round_index),
+                },
+            ],
+            temperature=0.2,
+            max_tokens=2200,
+        )
+        return LlmRefinementResult(
+            artifact=SvgArtifact(id=artifact.id, stage="refined", svg=_extract_svg(response.content)),
+            response=response,
+        )
+
+
 def _plan_prompt(item: PromptItem) -> str:
     palette = ", ".join(item.palette)
     return f"""Create a JSON object for a 256x256 SVG icon plan.
@@ -124,6 +214,81 @@ Palette: {palette}
 Motifs: {motifs}
 Layout: {plan.layout}
 Constraints: {constraints}
+"""
+
+
+def _validation_prompt(
+    plan: IconPlan,
+    artifact: SvgArtifact,
+    tool_report: ValidationReport,
+    round_index: int,
+) -> str:
+    return f"""Validate this SVG icon and return one JSON object.
+Required JSON shape:
+{{
+  "valid": true or false,
+  "score": integer from 0 to 100,
+  "issues": [
+    {{"code": "short-kebab-code", "severity": "error|warning|info", "message": "specific concise issue"}}
+  ],
+  "semantic_alignment": "one short sentence",
+  "aesthetic_notes": "one short sentence",
+  "repair_brief": "one short sentence for the refiner"
+}}
+
+Validation standards:
+- The SVG must be a safe editable icon for prompt "{plan.prompt}".
+- It should follow the planned motifs: {", ".join(plan.motifs)}.
+- It must remain a 256x256 SVG with viewBox 0 0 256 256.
+- It must avoid scripts, external references, raster images, animations, CSS, filters, gradients, and text elements.
+- It should use only basic vector primitives and literal safe colors.
+- Mark parse errors, unsafe tags, missing viewBox, missing title/desc, external references, invalid colors, and non-icon complexity as issues.
+- Use severity "error" for unsafe or non-renderable problems.
+
+Icon plan JSON:
+{json.dumps(plan.to_json(), indent=2)}
+
+Deterministic SVG check report JSON:
+{json.dumps(tool_report.to_json(), indent=2)}
+
+Round index: {round_index}
+
+SVG to validate:
+{artifact.svg}
+"""
+
+
+def _refinement_prompt(
+    plan: IconPlan,
+    artifact: SvgArtifact,
+    validation_report: ValidationReport,
+    tool_report: ValidationReport,
+    round_index: int,
+) -> str:
+    palette = ", ".join(plan.palette)
+    return f"""Repair the SVG below and return only one complete SVG document.
+Hard requirements:
+- Canvas must be exactly <svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">.
+- Include <title> and <desc>.
+- Use only these SVG elements: svg, title, desc, path, circle, rect, line, polyline, polygon, ellipse.
+- Use only literal #RRGGBB colors plus white, black, none, or transparent.
+- Do not use style attributes, classes, defs, filters, gradients, transforms, text, script, image, foreignObject, animation, or external references.
+- Keep 4 to 20 drawing primitives and preserve the prompt semantics.
+- Prefer this palette: {palette}.
+
+Prompt: {plan.prompt}
+Motifs: {", ".join(plan.motifs)}
+Layout: {plan.layout}
+Refinement round: {round_index}
+
+LLM validator report JSON:
+{json.dumps(validation_report.to_json(), indent=2)}
+
+Deterministic SVG check report JSON:
+{json.dumps(tool_report.to_json(), indent=2)}
+
+Current SVG:
+{artifact.svg}
 """
 
 
@@ -170,6 +335,81 @@ def _coerce_plan(item: PromptItem, data: dict[str, Any]) -> IconPlan:
         layout=str(layout).strip().lower().replace(" ", "-"),
         constraints=constraints,
     )
+
+
+def _coerce_validation_report(
+    artifact: SvgArtifact,
+    data: dict[str, Any],
+    tool_report: ValidationReport,
+) -> ValidationReport:
+    score = _coerce_score(data.get("score"), fallback=tool_report.score)
+    issues = _coerce_validation_issues(data.get("issues"))
+    if data.get("valid") is False and not issues:
+        issues.append(
+            ValidationIssue(
+                code="llm-invalid",
+                severity="warning",
+                message="LLM validator marked the SVG as invalid but did not list a specific issue.",
+            )
+        )
+
+    seen_codes = {issue.code for issue in issues}
+    for tool_issue in tool_report.issues:
+        code = f"tool-{tool_issue.code}"
+        if code in seen_codes or tool_issue.code in seen_codes:
+            continue
+        issues.append(
+            ValidationIssue(
+                code=code,
+                severity=tool_issue.severity,
+                message=f"Local SVG check: {tool_issue.message}",
+            )
+        )
+        seen_codes.add(code)
+
+    if not tool_report.is_valid:
+        score = min(score, tool_report.score)
+
+    return ValidationReport(
+        id=artifact.id,
+        stage=artifact.stage,
+        score=score,
+        issues=tuple(issues),
+    )
+
+
+def _coerce_score(value: Any, fallback: int) -> int:
+    try:
+        score = int(value)
+    except (TypeError, ValueError):
+        score = fallback
+    return max(0, min(100, score))
+
+
+def _coerce_validation_issues(value: Any) -> list[ValidationIssue]:
+    if not isinstance(value, list):
+        return []
+    issues: list[ValidationIssue] = []
+    for index, item in enumerate(value):
+        if not isinstance(item, dict):
+            continue
+        code = item.get("code")
+        severity = item.get("severity")
+        message = item.get("message")
+        if not isinstance(code, str) or not code.strip():
+            code = f"llm-issue-{index + 1}"
+        if severity not in {"error", "warning", "info"}:
+            severity = "warning"
+        if not isinstance(message, str) or not message.strip():
+            message = "LLM validator reported an issue without details."
+        issues.append(
+            ValidationIssue(
+                code=code.strip().lower().replace(" ", "-"),
+                severity=severity,
+                message=message.strip(),
+            )
+        )
+    return issues
 
 
 def _coerce_palette(value: Any, fallback: tuple[str, str, str]) -> tuple[str, str, str]:
