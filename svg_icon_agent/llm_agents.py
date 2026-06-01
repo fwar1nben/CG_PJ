@@ -135,7 +135,10 @@ def _json_object(content: str) -> dict[str, Any]:
         match = re.search(r"\{.*\}", cleaned, flags=re.DOTALL)
         if not match:
             raise OpenRouterError("Planner response did not contain a JSON object.")
-        data = json.loads(match.group(0))
+        try:
+            data = json.loads(match.group(0))
+        except json.JSONDecodeError as exc:
+            raise OpenRouterError("Planner response JSON was malformed.") from exc
     if not isinstance(data, dict):
         raise OpenRouterError("Planner response JSON must be an object.")
     return data
@@ -210,4 +213,3 @@ def _strip_fence(content: str) -> str:
         cleaned = re.sub(r"^```[a-zA-Z0-9_-]*\s*", "", cleaned)
         cleaned = re.sub(r"\s*```$", "", cleaned)
     return cleaned.strip()
-
