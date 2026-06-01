@@ -6,6 +6,8 @@ import json
 import os
 import tempfile
 import unittest
+from contextlib import redirect_stdout
+from io import StringIO
 from unittest.mock import patch
 from pathlib import Path
 
@@ -65,7 +67,7 @@ class PipelineTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             output = Path(tmp)
 
-            exit_code = main(["--prompt", str(PROMPT_PATH), "--out", str(output), "--backend", "rule"])
+            exit_code = main(["--prompt", str(PROMPT_PATH), "--out", str(output), "--backend", "rule", "--quiet"])
 
             self.assertEqual(exit_code, 0)
             self.assertEqual(len(list((output / "baseline").glob("*.svg"))), 12)
@@ -77,6 +79,19 @@ class PipelineTests(unittest.TestCase):
             self.assertEqual(metrics["total"], 12)
             self.assertEqual(metrics["refined_valid"], 12)
             self.assertGreater(metrics["average_score_delta"], 0)
+
+    def test_cli_prints_realtime_progress_by_default(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp)
+            stream = StringIO()
+
+            with redirect_stdout(stream):
+                exit_code = main(["--prompt", str(PROMPT_PATH), "--out", str(output), "--backend", "rule"])
+
+            text = stream.getvalue()
+            self.assertEqual(exit_code, 0)
+            self.assertIn("Loading prompts", text)
+            self.assertIn("Pipeline complete", text)
 
 
 class OpenRouterBackendTests(unittest.TestCase):
@@ -215,7 +230,7 @@ class OpenRouterBackendTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             output = Path(tmp)
             with patch.dict(os.environ, {"OPENROUTER_API_KEY": "secret-test-key"}, clear=False):
-                exit_code = main(["--prompt", str(PROMPT_PATH), "--out", str(output), "--backend", "rule"])
+                exit_code = main(["--prompt", str(PROMPT_PATH), "--out", str(output), "--backend", "rule", "--quiet"])
 
             trace_text = (output / "llm_trace.json").read_text(encoding="utf-8")
             self.assertEqual(exit_code, 0)

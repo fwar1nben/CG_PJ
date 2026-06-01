@@ -11,6 +11,8 @@ import requests
 
 DEFAULT_OPENROUTER_MODEL = "openai/gpt-oss-120b:free"
 OPENROUTER_CHAT_URL = "https://openrouter.ai/api/v1/chat/completions"
+DEFAULT_TIMEOUT = 60.0
+DEFAULT_MAX_RETRIES = 2
 
 
 class OpenRouterError(RuntimeError):
@@ -22,19 +24,27 @@ class OpenRouterConfig:
     api_key: str
     model: str = DEFAULT_OPENROUTER_MODEL
     endpoint: str = OPENROUTER_CHAT_URL
-    timeout: float = 60.0
-    max_retries: int = 2
+    timeout: float = DEFAULT_TIMEOUT
+    max_retries: int = DEFAULT_MAX_RETRIES
     app_title: str = "SVG Icon Agent"
     http_referer: str | None = None
 
     @classmethod
-    def from_env(cls, model: str | None = None) -> "OpenRouterConfig":
+    def from_env(
+        cls,
+        model: str | None = None,
+        *,
+        timeout: float | None = None,
+        max_retries: int | None = None,
+    ) -> "OpenRouterConfig":
         api_key = os.environ.get("OPENROUTER_API_KEY", "").strip()
         if not api_key:
             raise OpenRouterError("OPENROUTER_API_KEY is not set.")
         return cls(
             api_key=api_key,
             model=model or os.environ.get("OPENROUTER_MODEL", DEFAULT_OPENROUTER_MODEL),
+            timeout=timeout if timeout is not None else DEFAULT_TIMEOUT,
+            max_retries=max_retries if max_retries is not None else DEFAULT_MAX_RETRIES,
             http_referer=os.environ.get("OPENROUTER_HTTP_REFERER") or None,
         )
 
@@ -151,4 +161,3 @@ def _response_json(response: requests.Response) -> dict[str, Any]:
 def _safe_response_text(response: requests.Response) -> str:
     text = response.text.strip().replace(os.environ.get("OPENROUTER_API_KEY", ""), "")
     return text[:500] if text else "<empty response>"
-
