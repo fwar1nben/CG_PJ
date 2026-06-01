@@ -21,11 +21,22 @@ or export the variables in your shell:
 ```bash
 export OPENROUTER_API_KEY="your-key"
 export OPENROUTER_MODEL="openai/gpt-oss-120b:free"
-.venv/bin/python main.py --prompt prompts/examples.json --out outputs --backend openrouter
+.venv/bin/python main.py \
+  --prompt prompts/examples.json \
+  --out outputs \
+  --backend openrouter \
+  --request-timeout 30 \
+  --max-retries 1
 ```
 
 The default `--backend auto` uses OpenRouter when `OPENROUTER_API_KEY` is set and
 falls back to the deterministic rule backend otherwise.
+
+OpenRouter free models can be slow or queued. With the default `--llm-stage plan-svg`,
+the system may make up to two model requests per prompt: one for planning and one
+for SVG drafting. The command prints realtime progress for each stage. To halve
+the number of model calls, use `--llm-stage plan`; the SVG will then be generated
+by the deterministic rule backend from the LLM plan.
 
 Generated SVG, PNG, JSON metrics, and an HTML gallery are written under `outputs/`.
 
@@ -69,6 +80,9 @@ the system reproducible when the free model is unavailable.
 - `--backend rule|openrouter|auto`: choose deterministic rules, OpenRouter, or
   automatic backend selection.
 - `--model`: OpenRouter model id, default `openai/gpt-oss-120b:free`.
+- `--request-timeout`: per-request OpenRouter timeout in seconds.
+- `--max-retries`: retry count for retryable OpenRouter failures.
 - `--llm-stage plan|plan-svg`: use the LLM for planning only or for both planning
   and SVG drafting.
 - `--max-refine-rounds`: maximum deterministic repair rounds after validation.
+- `--quiet`: hide realtime progress logs.
