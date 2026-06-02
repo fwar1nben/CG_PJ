@@ -16,9 +16,13 @@ from svg_icon_agent.backends import generate_with_backend
 from svg_icon_agent.cli import main
 from svg_icon_agent.exporter import render_svg_to_png
 from svg_icon_agent.llm_agents import (
+    OpenRouterConsensusSelectorAgent,
+    OpenRouterMultiCandidateGeneratorAgent,
     OpenRouterPlannerAgent,
     OpenRouterRefinerAgent,
+    OpenRouterSemanticCriticAgent,
     OpenRouterSvgGeneratorAgent,
+    OpenRouterSvgQualityCriticAgent,
     OpenRouterValidatorAgent,
 )
 from svg_icon_agent.openrouter_client import OpenRouterClient, OpenRouterError, OpenRouterResponse
@@ -103,6 +107,45 @@ def _validation_response(valid=True, score=100, issues=None):
     )
 
 
+def _critique_response(candidate_ids, scores=None):
+    scores = scores or [80 for _ in candidate_ids]
+    return OpenRouterResponse(
+        content=json.dumps(
+            {
+                "critiques": [
+                    {
+                        "candidate_id": candidate_id,
+                        "score": scores[index],
+                        "strengths": ["clear silhouette"],
+                        "issues": [],
+                        "recommendation": "Keep this candidate concise.",
+                    }
+                    for index, candidate_id in enumerate(candidate_ids)
+                ]
+            }
+        ),
+        model="openai/gpt-oss-120b:free",
+        usage={"completion_tokens": 40},
+        raw={"choices": [{"message": {"content": "critic-json"}}]},
+    )
+
+
+def _selection_response(winner="candidate-2"):
+    return OpenRouterResponse(
+        content=json.dumps(
+            {
+                "winner_candidate_id": winner,
+                "rationale": "It has the clearest symbol and safest structure.",
+                "risks": ["minor details may need simplification"],
+                "repair_brief": "Simplify details and preserve the selected silhouette.",
+            }
+        ),
+        model="openai/gpt-oss-120b:free",
+        usage={"completion_tokens": 45},
+        raw={"choices": [{"message": {"content": "selector-json"}}]},
+    )
+
+
 class PromptTests(unittest.TestCase):
     def test_examples_have_expected_coverage(self) -> None:
         prompts = load_prompts(PROMPT_PATH)
@@ -160,6 +203,10 @@ class OpenRouterAgentBoundaryTests(unittest.TestCase):
         for cls in (
             OpenRouterPlannerAgent,
             OpenRouterSvgGeneratorAgent,
+            OpenRouterMultiCandidateGeneratorAgent,
+            OpenRouterSemanticCriticAgent,
+            OpenRouterSvgQualityCriticAgent,
+            OpenRouterConsensusSelectorAgent,
             OpenRouterValidatorAgent,
             OpenRouterRefinerAgent,
         ):
@@ -235,6 +282,42 @@ class OpenRouterPipelineTests(unittest.TestCase):
         self.assertEqual(refinements[0].rounds_used, 1)
         self.assertTrue(refinements[0].refined_report.is_valid)
         self.assertNotIn("<script", refinements[0].artifact.svg)
+
+    def test_collaboration_agents_generate_critique_and_select_candidates(self) -> None:
+        item = load_prompts(PROMPT_PATH)[0]
+        plan = _plan_response(item)
+        plan_result = OpenRouterPlannerAgent(FakeOpenRouterClient([plan])).plan(item)
+        client = FakeOpenRouterClient(
+            [
+                _svg_response(VALID_SVG),
+                _svg_response(VALID_SVG.replace("Cloud Download", "Cloud Download Variant")),
+                _critique_response(["candidate-1", "candidate-2"], scores=[72, 91]),
+                _critique_response(["candidate-1", "candidate-2"], scores=[80, 88]),
+                _selection_response("candidate-2"),
+            ]
+        )
+
+        candidates = OpenRouterMultiCandidateGeneratorAgent(client).generate(plan_result.plan, candidate_count=2)
+        tool_reports = [SvgCheckTool().check(candidate) for candidate in candidates.artifacts]
+        semantic = OpenRouterSemanticCriticAgent(client).critique(plan_result.plan, list(candidates.artifacts))
+        quality = OpenRouterSvgQualityCriticAgent(client).critique(
+            plan_result.plan,
+            list(candidates.artifacts),
+            tool_reports,
+        )
+        selection = OpenRouterConsensusSelectorAgent(client).select(
+            plan_result.plan,
+            list(candidates.artifacts),
+            [semantic, quality],
+            tool_reports,
+        )
+
+        self.assertEqual(len(client.calls), 5)
+        self.assertEqual([candidate.stage for candidate in candidates.artifacts], ["candidate-1", "candidate-2"])
+        self.assertEqual(semantic.perspective, "semantic")
+        self.assertEqual(quality.perspective, "svg-quality")
+        self.assertEqual(selection.winner_candidate_id, "candidate-2")
+        self.assertIn("silhouette", selection.repair_brief)
 
     def test_openrouter_failure_does_not_fall_back_to_local_svg(self) -> None:
         item = load_prompts(PROMPT_PATH)[0]
