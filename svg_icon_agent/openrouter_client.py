@@ -9,7 +9,8 @@ from typing import Any
 
 import requests
 
-DEFAULT_OPENROUTER_MODEL = "openai/gpt-oss-120b:free"
+# DEFAULT_OPENROUTER_MODEL = "openai/gpt-oss-120b:free"
+DEFAULT_OPENROUTER_MODEL = "deepseek/deepseek-v4-flash"
 OPENROUTER_CHAT_URL = "https://openrouter.ai/api/v1/chat/completions"
 DEFAULT_TIMEOUT = 60.0
 DEFAULT_MAX_RETRIES = 2
