@@ -4,7 +4,8 @@ SVG Icon Agent is a lightweight text-to-SVG project for Computer Graphics Projec
 It turns short English icon prompts into editable SVG icons through a fully
 LLM-backed multi-agent pipeline: OpenRouter planning, multi-candidate SVG
 drafting, semantic and SVG-quality critique, consensus selection, validation,
-refinement, and gallery export. Local code is limited to prompt loading,
+refinement, and gallery export. A Prompt Rewriter Agent first optimizes the
+input description for SVG icon generation. Local code is limited to prompt loading,
 machine-checkable SVG safety checks, rendering, and reporting tools.
 
 ## Quick start
@@ -46,7 +47,8 @@ Manual input is also supported:
 
 OpenRouter free models can be slow or queued. The pipeline makes model calls for
 planning, candidate SVG drafting, LLM critique, consensus selection, validation,
-and LLM refinement when repairs are needed.
+and LLM refinement when repairs are needed. The default workflow also rewrites
+the prompt before planning.
 The command prints realtime progress for each stage. If a model call fails, the
 error is logged; the system does not synthesize a local SVG fallback.
 
@@ -66,22 +68,24 @@ Useful output files:
 
 ## Pipeline
 
-1. Planner Agent extracts icon intent, palette, category, objects, and constraints.
+1. Prompt Rewriter Agent rewrites the user prompt into a concise SVG-icon prompt.
    This Agent calls OpenRouter.
-2. Multi-Candidate Generator Agent creates several different SVG drafts.
+2. Planner Agent extracts icon intent, palette, category, objects, and constraints.
    This Agent calls OpenRouter.
-3. Semantic Critic Agent judges prompt alignment and small-icon readability.
+3. Multi-Candidate Generator Agent creates several different SVG drafts.
    This Agent calls OpenRouter.
-4. SVG Quality Critic Agent judges editability, safety, and rendering risk using
+4. Semantic Critic Agent judges prompt alignment and small-icon readability.
+   This Agent calls OpenRouter.
+5. SVG Quality Critic Agent judges editability, safety, and rendering risk using
    local `SvgCheckTool` findings as evidence. This Agent calls OpenRouter.
-5. Consensus Selector Agent chooses the strongest candidate and writes a repair
+6. Consensus Selector Agent chooses the strongest candidate and writes a repair
    brief for the next Agent. This Agent calls OpenRouter.
-6. Validator Agent judges semantic alignment, visual quality, editability, and
+7. Validator Agent judges semantic alignment, visual quality, editability, and
    rule compliance. This Agent calls OpenRouter and receives local `SvgCheckTool`
    findings as evidence.
-7. Refiner Agent repairs validation issues by returning a complete revised SVG.
+8. Refiner Agent repairs validation issues by returning a complete revised SVG.
    This Agent calls OpenRouter.
-8. Local tools render PNG previews, metrics, trace logs, and the gallery.
+9. Local tools render PNG previews, metrics, trace logs, and the gallery.
 
 ## Current experiment
 
@@ -110,6 +114,7 @@ rendering, and report export.
 - `--model`: OpenRouter model id, default `openai/gpt-oss-120b:free`.
 - `--workflow`: `collaborative` by default; use `single` for ablation.
 - `--candidate-count`: number of SVG candidates in collaborative mode, default 3.
+- `--no-prompt-rewrite`: disable Prompt Rewriter Agent for ablation.
 - `--request-timeout`: per-request OpenRouter timeout in seconds.
 - `--max-retries`: retry count for retryable OpenRouter failures.
 - `--empty-response-retries`: retry count for empty model messages, default 3.

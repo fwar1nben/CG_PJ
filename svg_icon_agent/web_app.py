@@ -36,6 +36,7 @@ class WebRun:
     reasoning_max_tokens: int | None
     workflow: str
     candidate_count: int
+    rewrite_prompt: bool
     status: str = "queued"
     error: str | None = None
     created_at: float = field(default_factory=time.time)
@@ -78,6 +79,7 @@ def create_app(
         reasoning_max_tokens = _optional_int_value(payload.get("reasoning_max_tokens"), minimum=0, maximum=20000)
         workflow = _workflow_value(payload.get("workflow"))
         candidate_count = _int_value(payload.get("candidate_count"), 3, minimum=1, maximum=6)
+        rewrite_prompt = bool(payload.get("rewrite_prompt", True))
         run_id = f"{int(time.time())}-{uuid.uuid4().hex[:8]}"
         run = WebRun(
             id=run_id,
@@ -93,6 +95,7 @@ def create_app(
             reasoning_max_tokens=reasoning_max_tokens,
             workflow=workflow,
             candidate_count=candidate_count,
+            rewrite_prompt=rewrite_prompt,
         )
         with lock:
             runs[run_id] = run
@@ -134,6 +137,7 @@ def create_app(
                 reasoning_max_tokens=None,
                 workflow="collaborative",
                 candidate_count=3,
+                rewrite_prompt=True,
             )
             run.status = "completed" if (output_dir / "metrics.json").exists() else "failed"
         return jsonify(_run_payload(run))
@@ -170,6 +174,7 @@ def _execute_run(run: WebRun, client_factory: ClientFactory | None) -> None:
             reasoning_max_tokens=run.reasoning_max_tokens,
             workflow=run.workflow,
             candidate_count=run.candidate_count,
+            rewrite_prompt=run.rewrite_prompt,
             client=client,
             progress=logger,
         )
@@ -196,6 +201,7 @@ def _run_payload(run: WebRun, *, include_files: bool = True) -> dict[str, Any]:
         "reasoning_max_tokens": run.reasoning_max_tokens,
         "workflow": run.workflow,
         "candidate_count": run.candidate_count,
+        "rewrite_prompt": run.rewrite_prompt,
         "status": run.status,
         "error": run.error,
         "created_at": run.created_at,
@@ -394,6 +400,10 @@ _INDEX_HTML = """<!doctype html>
       color: var(--ink);
       background: #fff;
     }
+    input[type="checkbox"] {
+      width: auto;
+      margin-right: 8px;
+    }
     textarea {
       min-height: 132px;
       resize: vertical;
@@ -428,6 +438,26 @@ _INDEX_HTML = """<!doctype html>
       align-items: center;
       justify-content: space-between;
       gap: 12px;
+    }
+    .prompt-panel {
+      padding: 14px 16px;
+      display: grid;
+      gap: 10px;
+    }
+    .prompt-compare {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    .prompt-box {
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 10px;
+      min-height: 82px;
+      background: #fbfdff;
+      color: var(--ink);
+      font-size: 13px;
+      line-height: 1.45;
     }
     .pill {
       display: inline-flex;
@@ -592,6 +622,7 @@ _INDEX_HTML = """<!doctype html>
       aside { min-height: auto; }
       .previews { grid-template-columns: 1fr; }
       .candidate-grid { grid-template-columns: 1fr; }
+      .prompt-compare { grid-template-columns: 1fr; }
       .event { grid-template-columns: 64px 92px minmax(0, 1fr); }
     }
   </style>
@@ -621,6 +652,10 @@ _INDEX_HTML = """<!doctype html>
           <input id="candidateCount" type="number" min="1" max="6" value="3">
         </div>
       </div>
+      <label>
+        <input id="rewritePrompt" type="checkbox" checked>
+        Prompt Rewriter Agent
+      </label>
       <div class="row">
         <div>
           <label for="rounds">Repair rounds</label>
@@ -665,6 +700,19 @@ _INDEX_HTML = """<!doctype html>
         <div>
           <span id="runId" class="pill">No run</span>
           <span id="runState" class="pill">idle</span>
+        </div>
+      </section>
+      <section class="prompt-panel">
+        <h2>Prompt Rewrite</h2>
+        <div class="prompt-compare">
+          <div>
+            <label>Original</label>
+            <div id="originalPrompt" class="prompt-box">Waiting for input</div>
+          </div>
+          <div>
+            <label>Rewritten</label>
+            <div id="rewrittenPrompt" class="prompt-box">Waiting for Prompt Rewriter Agent</div>
+          </div>
         </div>
       </section>
       <section class="previews">
@@ -719,6 +767,7 @@ _INDEX_HTML = """<!doctype html>
         max_refine_rounds: Number(document.getElementById('rounds').value),
         workflow: document.getElementById('workflow').value,
         candidate_count: Number(document.getElementById('candidateCount').value),
+        rewrite_prompt: document.getElementById('rewritePrompt').checked,
         request_timeout: Number(document.getElementById('timeout').value),
         empty_response_retries: Number(document.getElementById('emptyRetries').value),
         max_tokens: Number(document.getElementById('maxTokens').value) || null,
@@ -763,6 +812,7 @@ _INDEX_HTML = """<!doctype html>
       renderTimeline(data.events || []);
       renderJson('trace', data.trace || data.summary || {});
       renderJson('raw', data.raw_events || []);
+      renderPromptRewrite(data);
       renderArtifacts(data.artifacts || {});
       renderCandidates((data.artifacts || {}).candidates || [], data.trace || []);
     }
@@ -806,6 +856,12 @@ _INDEX_HTML = """<!doctype html>
       document.getElementById('refinedCaption').textContent = artifacts.refined_png_url || 'Waiting for Refiner Agent';
       baseline.innerHTML = artifacts.baseline_svg_text ? artifacts.baseline_svg_text : '<div class="empty">No baseline SVG</div>';
       refined.innerHTML = artifacts.refined_png_url ? `<img src="${artifacts.refined_png_url}" alt="Refined PNG">` : '<div class="empty">No refined PNG</div>';
+    }
+
+    function renderPromptRewrite(data) {
+      const traceItem = data.trace && data.trace[0] ? data.trace[0] : {};
+      document.getElementById('originalPrompt').textContent = traceItem.original_prompt || data.prompt || 'Waiting for input';
+      document.getElementById('rewrittenPrompt').textContent = traceItem.rewritten_prompt || 'Waiting for Prompt Rewriter Agent';
     }
 
     function renderCandidates(candidates, trace) {

@@ -12,9 +12,17 @@ from svg_icon_agent.openrouter_client import OpenRouterClient, OpenRouterError, 
 from svg_icon_agent.prompts import HEX_RE, PromptItem, VALID_CATEGORIES, VALID_STYLES
 
 DEFAULT_PLANNER_MAX_TOKENS = 900
+DEFAULT_REWRITER_MAX_TOKENS = 700
 DEFAULT_SVG_MAX_TOKENS = 1800
 DEFAULT_VALIDATOR_MAX_TOKENS = 1200
 DEFAULT_REFINER_MAX_TOKENS = 2200
+
+
+@dataclass(frozen=True)
+class LlmRewriteResult:
+    item: PromptItem
+    rewritten_prompt: str
+    response: OpenRouterResponse
 
 
 @dataclass(frozen=True)
@@ -87,6 +95,52 @@ class LlmSelectionResult:
             "risks": list(self.risks),
             "repair_brief": self.repair_brief,
         }
+
+
+class OpenRouterPromptRewriterAgent:
+    """Uses an OpenRouter model to rewrite a user prompt for SVG icon generation."""
+
+    def __init__(
+        self,
+        client: OpenRouterClient,
+        max_tokens: int | None = None,
+        reasoning: dict[str, Any] | None = None,
+    ) -> None:
+        self.client = client
+        self.max_tokens = max_tokens
+        self.reasoning = reasoning
+
+    def rewrite(self, item: PromptItem) -> LlmRewriteResult:
+        response = self.client.chat(
+            [
+                {
+                    "role": "system",
+                    "content": (
+                        "You are a prompt rewriting agent for editable SVG icon generation. "
+                        "Return only JSON. Do not specify exact colors unless the user explicitly asked for them."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": _rewrite_prompt(item),
+                },
+            ],
+            response_format={"type": "json_object"},
+            reasoning=self.reasoning,
+            temperature=0.15,
+            max_tokens=self.max_tokens or DEFAULT_REWRITER_MAX_TOKENS,
+        )
+        data = _json_object(response.content, "Prompt rewriter")
+        rewritten = _coerce_rewritten_prompt(item, data)
+        rewritten_item = PromptItem(
+            id=item.id,
+            category=item.category,
+            prompt=rewritten,
+            style=item.style,
+            palette=item.palette,
+            source=item.source,
+        )
+        return LlmRewriteResult(item=rewritten_item, rewritten_prompt=rewritten, response=response)
 
 
 class OpenRouterPlannerAgent:
@@ -430,6 +484,28 @@ class OpenRouterRefinerAgent:
             artifact=SvgArtifact(id=artifact.id, stage="refined", svg=_extract_svg(response.content)),
             response=response,
         )
+
+
+def _rewrite_prompt(item: PromptItem) -> str:
+    return f"""Rewrite this icon request for a text-to-SVG icon agent.
+Return one JSON object with this exact shape:
+{{
+  "rewritten_prompt": "one concise English prompt, 12 to 32 words"
+}}
+
+Rules:
+- Preserve the user's original intent and any explicitly requested subject, action, style, or color words.
+- Make the request concrete for a 256x256 editable SVG icon.
+- Mention the main object, important supporting motifs, and composition if useful.
+- Do not add exact color names or color hex values unless the original prompt explicitly included them.
+- Do not include SVG code, markdown, explanations, or multiple alternatives.
+
+Original prompt:
+{item.prompt}
+
+Category hint: {item.category}
+Style hint: {item.style}
+"""
 
 
 def _plan_prompt(item: PromptItem) -> str:
@@ -796,6 +872,22 @@ def _coerce_validation_report(
         score=score,
         issues=tuple(issues),
     )
+
+
+def _coerce_rewritten_prompt(item: PromptItem, data: dict[str, Any]) -> str:
+    value = data.get("rewritten_prompt")
+    if not isinstance(value, str) or not value.strip():
+        raise OpenRouterError(
+            "Prompt rewriter response did not include rewritten_prompt.",
+            debug_payload={"content_excerpt": json.dumps(data)[:4000]},
+        )
+    rewritten = " ".join(value.strip().split())
+    if len(rewritten) < 8:
+        raise OpenRouterError(
+            "Prompt rewriter returned a prompt that was too short.",
+            debug_payload={"rewritten_prompt": rewritten, "original_prompt": item.prompt},
+        )
+    return rewritten[:500]
 
 
 def _coerce_critiques(data: dict[str, Any], candidates: list[SvgArtifact]) -> tuple[CandidateCritique, ...]:

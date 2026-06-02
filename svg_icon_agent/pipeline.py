@@ -74,6 +74,7 @@ def run_single_prompt_pipeline(
     reasoning_max_tokens: int | None = None,
     workflow: str = "collaborative",
     candidate_count: int = 3,
+    rewrite_prompt: bool = True,
     client: OpenRouterClient | None = None,
     progress: ProgressLogger | None = None,
 ) -> PipelineRunResult:
@@ -90,6 +91,7 @@ def run_single_prompt_pipeline(
         reasoning_max_tokens=reasoning_max_tokens,
         workflow=workflow,
         candidate_count=candidate_count,
+        rewrite_prompt=rewrite_prompt,
         client=client,
         progress=progress,
     )
@@ -109,6 +111,7 @@ def run_prompt_pipeline(
     reasoning_max_tokens: int | None = None,
     workflow: str = "collaborative",
     candidate_count: int = 3,
+    rewrite_prompt: bool = True,
     client: OpenRouterClient | None = None,
     progress: ProgressLogger | None = None,
 ) -> PipelineRunResult:
@@ -142,6 +145,7 @@ def run_prompt_pipeline(
             reasoning=reasoning,
             workflow=workflow,
             candidate_count=candidate_count,
+            rewrite_prompt=rewrite_prompt,
             progress=logger,
         )
     except (OpenRouterError, ValueError) as exc:
@@ -332,6 +336,8 @@ def _stage_from_message(message: str) -> str:
     lowered = message.lower()
     if "plan" in lowered or "planner" in lowered:
         return "planner"
+    if "rewrite" in lowered or "rewritten prompt" in lowered:
+        return "prompt-rewriter"
     if "svg draft" in lowered or "baseline svg" in lowered:
         return "svg-generator"
     if "candidate" in lowered:

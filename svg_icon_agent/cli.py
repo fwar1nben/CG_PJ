@@ -41,6 +41,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Number of SVG candidates in collaborative workflow.",
     )
     parser.add_argument(
+        "--no-prompt-rewrite",
+        action="store_true",
+        help="Disable the Prompt Rewriter Agent for ablation.",
+    )
+    parser.add_argument(
         "--request-timeout",
         type=float,
         default=60.0,
@@ -116,6 +121,7 @@ def main(argv: list[str] | None = None) -> int:
         reasoning_max_tokens=args.reasoning_max_tokens,
         workflow=args.workflow,
         candidate_count=args.candidate_count,
+        rewrite_prompt=not args.no_prompt_rewrite,
         progress=progress,
     )
     if result.status != "completed":

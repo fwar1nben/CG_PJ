@@ -19,6 +19,7 @@ from svg_icon_agent.llm_agents import (
     OpenRouterConsensusSelectorAgent,
     OpenRouterMultiCandidateGeneratorAgent,
     OpenRouterPlannerAgent,
+    OpenRouterPromptRewriterAgent,
     OpenRouterRefinerAgent,
     OpenRouterSemanticCriticAgent,
     OpenRouterSvgGeneratorAgent,
@@ -102,6 +103,15 @@ def _plan_response(item):
     )
 
 
+def _rewrite_response(text="a clear minimal cloud download icon with centered arrow and simple geometric silhouette"):
+    return OpenRouterResponse(
+        content=json.dumps({"rewritten_prompt": text}),
+        model="openai/gpt-oss-120b:free",
+        usage={"completion_tokens": 18},
+        raw={"choices": [{"message": {"content": "rewrite-json"}}]},
+    )
+
+
 def _svg_response(svg=VALID_SVG):
     return OpenRouterResponse(
         content=svg,
@@ -171,6 +181,7 @@ def _selection_response(winner="candidate-2"):
 def _collaborative_success_responses(item, winner="candidate-2"):
     candidate_ids = ["candidate-1", "candidate-2", "candidate-3"]
     return [
+        _rewrite_response(item.prompt),
         _plan_response(item),
         _svg_response(VALID_SVG),
         _svg_response(VALID_SVG.replace("Cloud Download", "Cloud Download Alt")),
@@ -238,6 +249,7 @@ class OpenRouterAgentBoundaryTests(unittest.TestCase):
     def test_all_agent_constructors_require_openrouter_client(self) -> None:
         for cls in (
             OpenRouterPlannerAgent,
+            OpenRouterPromptRewriterAgent,
             OpenRouterSvgGeneratorAgent,
             OpenRouterMultiCandidateGeneratorAgent,
             OpenRouterSemanticCriticAgent,
@@ -300,6 +312,18 @@ class OpenRouterPipelineTests(unittest.TestCase):
         self.assertEqual(client.calls[0]["kwargs"]["max_tokens"], 4096)
         self.assertEqual(client.calls[0]["kwargs"]["reasoning"], {"effort": "none", "exclude": True})
 
+    def test_prompt_rewriter_converts_prompt_item(self) -> None:
+        item = make_prompt_from_text("rocket")
+        rewritten = "a minimal rocket launch icon with a clear centered silhouette and dynamic flame"
+        client = FakeOpenRouterClient([_rewrite_response(rewritten)])
+
+        result = OpenRouterPromptRewriterAgent(client).rewrite(item)
+
+        self.assertEqual(result.item.id, item.id)
+        self.assertEqual(result.item.prompt, rewritten)
+        self.assertEqual(result.rewritten_prompt, rewritten)
+        self.assertEqual(len(client.calls), 1)
+
     def test_reasoning_max_tokens_takes_precedence_over_effort(self) -> None:
         self.assertEqual(
             make_reasoning_config("high", reasoning_max_tokens=128),
@@ -329,6 +353,7 @@ class OpenRouterPipelineTests(unittest.TestCase):
             model="openai/gpt-oss-120b:free",
             llm_stage="plan-svg",
             client=client,
+            rewrite_prompt=False,
         )
         refinements = refine_artifacts(
             backend.plans,
@@ -398,6 +423,9 @@ class OpenRouterPipelineTests(unittest.TestCase):
 
         self.assertEqual(len(backend.artifacts), 1)
         self.assertEqual(len(backend.candidate_artifacts), 3)
+        self.assertEqual(backend.traces[0].rewriter_backend, "openrouter")
+        self.assertEqual(backend.traces[0].original_prompt, item.prompt)
+        self.assertEqual(backend.traces[0].rewritten_prompt, item.prompt)
         self.assertEqual(backend.traces[0].workflow, "collaborative")
         self.assertEqual(backend.traces[0].selected_candidate_id, "candidate-2")
         self.assertEqual(backend.traces[0].svg_backend, "openrouter-collaborative")
@@ -419,6 +447,7 @@ class OpenRouterPipelineTests(unittest.TestCase):
             model="openai/gpt-oss-120b:free",
             llm_stage="plan-svg",
             client=client,
+            rewrite_prompt=False,
         )
 
         self.assertEqual(backend.artifacts, [])
@@ -438,6 +467,7 @@ class OpenRouterPipelineTests(unittest.TestCase):
             model="openai/gpt-oss-120b:free",
             llm_stage="plan-svg",
             client=client,
+            rewrite_prompt=False,
         )
 
         self.assertEqual(backend.artifacts, [])
@@ -471,7 +501,9 @@ class CliTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             output = Path(tmp)
             with patch("svg_icon_agent.pipeline.create_openrouter_client", return_value=client):
-                exit_code = main(["--text", prompt, "--out", str(output), "--workflow", "single", "--quiet"])
+                exit_code = main(
+                    ["--text", prompt, "--out", str(output), "--workflow", "single", "--no-prompt-rewrite", "--quiet"]
+                )
 
             self.assertEqual(exit_code, 0)
             self.assertEqual(len(list((output / "baseline").glob("*.svg"))), 1)
@@ -495,7 +527,9 @@ class CliTests(unittest.TestCase):
             output = Path(tmp)
             with patch("svg_icon_agent.pipeline.create_openrouter_client", return_value=client):
                 with patch.dict(os.environ, {"OPENROUTER_API_KEY": "secret-test-key"}, clear=False):
-                    exit_code = main(["--text", prompt, "--out", str(output), "--workflow", "single", "--quiet"])
+                    exit_code = main(
+                        ["--text", prompt, "--out", str(output), "--workflow", "single", "--no-prompt-rewrite", "--quiet"]
+                    )
 
             self.assertEqual(exit_code, 0)
 
@@ -532,6 +566,7 @@ class WebAppTests(unittest.TestCase):
                     "prompt": prompt,
                     "max_tokens": 4096,
                     "workflow": "single",
+                    "rewrite_prompt": False,
                     "empty_response_retries": 4,
                     "reasoning_effort": "none",
                     "reasoning_max_tokens": 128,
@@ -564,7 +599,10 @@ class WebAppTests(unittest.TestCase):
             )
             client = app.test_client()
 
-            response = client.post("/api/runs", json={"prompt": "a minimal rocket launch icon", "workflow": "single"})
+            response = client.post(
+                "/api/runs",
+                json={"prompt": "a minimal rocket launch icon", "workflow": "single", "rewrite_prompt": False},
+            )
             data = response.get_json()
 
             self.assertEqual(response.status_code, 200)
@@ -590,7 +628,10 @@ class WebAppTests(unittest.TestCase):
                     client_factory=lambda model, timeout, retries: fake_client,
                     run_async=False,
                 )
-                response = app.test_client().post("/api/runs", json={"prompt": prompt, "workflow": "single"})
+                response = app.test_client().post(
+                    "/api/runs",
+                    json={"prompt": prompt, "workflow": "single", "rewrite_prompt": False},
+                )
 
             data = response.get_json()
             raw_text = json.dumps(data["raw_events"])
@@ -618,8 +659,12 @@ class WebAppTests(unittest.TestCase):
             self.assertEqual(response.status_code, 200)
             self.assertEqual(data["status"], "completed")
             self.assertEqual(data["workflow"], "collaborative")
+            self.assertTrue(data["rewrite_prompt"])
             self.assertEqual(data["candidate_count"], 3)
             self.assertEqual(len(data["artifacts"]["candidates"]), 3)
+            self.assertEqual(data["trace"][0]["rewriter_backend"], "openrouter")
+            self.assertEqual(data["trace"][0]["original_prompt"], prompt)
+            self.assertEqual(data["trace"][0]["rewritten_prompt"], prompt)
             self.assertEqual(data["trace"][0]["selected_candidate_id"], "candidate-2")
             self.assertEqual(data["trace"][0]["svg_backend"], "openrouter-collaborative")
             self.assertEqual(data["trace"][0]["critic_reports"]["semantic"]["candidate-2"]["score"], 91)

@@ -10,6 +10,7 @@ from svg_icon_agent.llm_agents import (
     OpenRouterConsensusSelectorAgent,
     OpenRouterMultiCandidateGeneratorAgent,
     OpenRouterPlannerAgent,
+    OpenRouterPromptRewriterAgent,
     OpenRouterSemanticCriticAgent,
     OpenRouterSvgGeneratorAgent,
     OpenRouterSvgQualityCriticAgent,
@@ -36,6 +37,9 @@ class BackendTrace:
     svg_backend: str = "not-run"
     validator_backend: str = "not-run"
     refiner_backend: str = "not-run"
+    rewriter_backend: str = "not-run"
+    original_prompt: str | None = None
+    rewritten_prompt: str | None = None
     workflow: str = "single"
     candidate_count: int = 1
     selected_candidate_id: str | None = None
@@ -62,6 +66,9 @@ class BackendTrace:
             "svg_backend": self.svg_backend,
             "validator_backend": self.validator_backend,
             "refiner_backend": self.refiner_backend,
+            "rewriter_backend": self.rewriter_backend,
+            "original_prompt": self.original_prompt,
+            "rewritten_prompt": self.rewritten_prompt,
             "workflow": self.workflow,
             "candidate_count": self.candidate_count,
             "selected_candidate_id": self.selected_candidate_id,
@@ -127,6 +134,7 @@ def generate_with_backend(
     reasoning: dict[str, Any] | None = None,
     workflow: str = "single",
     candidate_count: int = 3,
+    rewrite_prompt: bool = True,
     progress: ProgressLogger | None = None,
 ) -> BackendResult:
     if backend != "openrouter":
@@ -168,6 +176,7 @@ def generate_with_backend(
         reasoning=reasoning,
         workflow=workflow,
         candidate_count=candidate_count,
+        rewrite_prompt=rewrite_prompt,
         progress=logger,
     )
 
@@ -183,8 +192,10 @@ def _openrouter_backend(
     reasoning: dict[str, Any] | None,
     workflow: str,
     candidate_count: int,
+    rewrite_prompt: bool,
     progress: ProgressLogger,
 ) -> BackendResult:
+    prompt_rewriter = OpenRouterPromptRewriterAgent(client, max_tokens=max_tokens, reasoning=reasoning)
     llm_planner = OpenRouterPlannerAgent(client, max_tokens=max_tokens, reasoning=reasoning)
     llm_generator = OpenRouterSvgGeneratorAgent(client, max_tokens=max_tokens, reasoning=reasoning)
     candidate_generator = OpenRouterMultiCandidateGeneratorAgent(client, max_tokens=max_tokens, reasoning=reasoning)
@@ -202,7 +213,6 @@ def _openrouter_backend(
 
     total = len(prompts)
     for index, item in enumerate(prompts, start=1):
-        progress.log(f"[{index}/{total}] {item.id}: requesting LLM plan.")
         trace = BackendTrace(
             id=item.id,
             requested_backend=requested_backend,
@@ -210,10 +220,34 @@ def _openrouter_backend(
             llm_stage=llm_stage,
             workflow=workflow,
             candidate_count=candidate_count if workflow == "collaborative" else 1,
+            original_prompt=item.prompt,
+            rewritten_prompt=item.prompt,
         )
 
+        active_item = item
+        if rewrite_prompt:
+            progress.log(f"[{index}/{total}] {item.id}: requesting prompt rewrite.")
+            try:
+                rewrite_result = prompt_rewriter.rewrite(item)
+            except OpenRouterError as exc:
+                trace.rewriter_backend = "openrouter-error"
+                trace.errors.append(f"rewriter: {exc}")
+                raw_events.append(_raw_event(item.id, "prompt-rewriter", "error", model, error=exc))
+                traces.append(trace)
+                progress.log(f"[{index}/{total}] {item.id}: prompt rewriter failed; no local fallback generated.")
+                continue
+            active_item = rewrite_result.item
+            trace.rewriter_backend = "openrouter"
+            trace.rewritten_prompt = rewrite_result.rewritten_prompt
+            trace.usage["prompt_rewriter"] = rewrite_result.response.usage
+            raw_events.append(_raw_event(item.id, "prompt-rewriter", "success", model, response=rewrite_result.response.raw))
+            progress.log(f"[{index}/{total}] {item.id}: rewritten prompt ready.")
+        else:
+            trace.rewriter_backend = "skipped"
+
+        progress.log(f"[{index}/{total}] {item.id}: requesting LLM plan.")
         try:
-            plan_result = llm_planner.plan(item)
+            plan_result = llm_planner.plan(active_item)
         except OpenRouterError as exc:
             trace.planner_backend = "openrouter-error"
             trace.errors.append(f"planner: {exc}")
