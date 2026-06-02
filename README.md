@@ -5,8 +5,10 @@ It turns short English icon prompts into editable SVG icons through a fully
 LLM-backed multi-agent pipeline: OpenRouter planning, multi-candidate SVG
 drafting, semantic and SVG-quality critique, consensus selection, validation,
 refinement, and gallery export. A Prompt Rewriter Agent first optimizes the
-input description for SVG icon generation. Local code is limited to prompt loading,
-machine-checkable SVG safety checks, rendering, and reporting tools.
+input description for SVG icon generation, and an SVG Optimizer Agent improves
+the selected draft from team feedback before validation. Local code is limited
+to prompt loading, machine-checkable SVG safety checks, rendering, and reporting
+tools.
 
 ## Quick start
 
@@ -33,7 +35,8 @@ export OPENROUTER_MODEL="openai/gpt-oss-120b:free"
   --max-tokens 4096 \
   --reasoning-effort none \
   --workflow collaborative \
-  --candidate-count 3
+  --candidate-count 3 \
+  --optimizer-feedback "simplify the silhouette and increase negative space"
 ```
 
 Manual input is also supported:
@@ -46,10 +49,10 @@ Manual input is also supported:
 ```
 
 OpenRouter free models can be slow or queued. The pipeline makes model calls for
-planning, candidate SVG drafting, LLM critique, consensus selection, validation,
-and LLM refinement when repairs are needed. The default workflow also rewrites
-the prompt before planning; the Web UI shows the rewritten prompt as soon as the
-Prompt Rewriter Agent finishes.
+planning, candidate SVG drafting, LLM critique, consensus selection, SVG
+optimization, validation, and LLM refinement when repairs are needed. The default
+workflow also rewrites the prompt before planning; the Web UI shows the rewritten
+prompt as soon as the Prompt Rewriter Agent finishes.
 The command prints realtime progress for each stage. If a model call fails, the
 error is logged; the system does not synthesize a local SVG fallback.
 
@@ -59,6 +62,7 @@ Useful output files:
 
 - `outputs/baseline/*.svg`: first-pass SVG icons.
 - `outputs/candidates/*.svg`: candidate drafts from collaborative mode.
+- `outputs/selected/*.svg`: raw Consensus Selector winners before optimization.
 - `outputs/refined/*.svg`: LLM-refined SVG icons.
 - `outputs/png/baseline/*.png` and `outputs/png/refined/*.png`: raster previews.
 - `outputs/gallery.html`: side-by-side visual comparison for the report and slides.
@@ -81,12 +85,14 @@ Useful output files:
    local `SvgCheckTool` findings as evidence. This Agent calls OpenRouter.
 6. Consensus Selector Agent chooses the strongest candidate and writes a repair
    brief for the next Agent. This Agent calls OpenRouter.
-7. Validator Agent judges semantic alignment, visual quality, editability, and
+7. SVG Optimizer Agent rewrites the selected SVG using Critic, Selector,
+   `SvgCheckTool`, and optional manual feedback. This Agent calls OpenRouter.
+8. Validator Agent judges semantic alignment, visual quality, editability, and
    rule compliance. This Agent calls OpenRouter and receives local `SvgCheckTool`
    findings as evidence.
-8. Refiner Agent repairs validation issues by returning a complete revised SVG.
+9. Refiner Agent repairs validation issues by returning a complete revised SVG.
    This Agent calls OpenRouter.
-9. Local tools render PNG previews, metrics, trace logs, and the gallery.
+10. Local tools render PNG previews, metrics, trace logs, and the gallery.
 
 ## Current experiment
 
@@ -116,6 +122,9 @@ rendering, and report export.
 - `--workflow`: `collaborative` by default; use `single` for ablation.
 - `--candidate-count`: number of SVG candidates in collaborative mode, default 3.
 - `--no-prompt-rewrite`: disable Prompt Rewriter Agent for ablation.
+- `--optimizer-feedback`: manual improvement advice for the SVG Optimizer Agent.
+- `--no-llm-optimizer-feedback`: optimizer uses only manual feedback and
+  `SvgCheckTool` context, without Critic/Selector advice.
 - `--request-timeout`: per-request OpenRouter timeout in seconds.
 - `--max-retries`: retry count for retryable OpenRouter failures.
 - `--empty-response-retries`: retry count for empty model messages, default 3.

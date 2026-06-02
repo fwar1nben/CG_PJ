@@ -13,6 +13,7 @@ from svg_icon_agent.llm_agents import (
     OpenRouterPromptRewriterAgent,
     OpenRouterSemanticCriticAgent,
     OpenRouterSvgGeneratorAgent,
+    OpenRouterSvgOptimizerAgent,
     OpenRouterSvgQualityCriticAgent,
 )
 from svg_icon_agent.models import IconPlan, SvgArtifact, ValidationReport
@@ -38,6 +39,11 @@ class BackendTrace:
     validator_backend: str = "not-run"
     refiner_backend: str = "not-run"
     rewriter_backend: str = "not-run"
+    optimizer_backend: str = "not-run"
+    optimizer_applied: bool = False
+    manual_optimizer_feedback: str | None = None
+    use_llm_optimizer_feedback: bool = True
+    optimizer_feedback_sources: list[str] = field(default_factory=list)
     original_prompt: str | None = None
     rewritten_prompt: str | None = None
     workflow: str = "single"
@@ -67,6 +73,11 @@ class BackendTrace:
             "validator_backend": self.validator_backend,
             "refiner_backend": self.refiner_backend,
             "rewriter_backend": self.rewriter_backend,
+            "optimizer_backend": self.optimizer_backend,
+            "optimizer_applied": self.optimizer_applied,
+            "manual_optimizer_feedback": self.manual_optimizer_feedback,
+            "use_llm_optimizer_feedback": self.use_llm_optimizer_feedback,
+            "optimizer_feedback_sources": self.optimizer_feedback_sources,
             "original_prompt": self.original_prompt,
             "rewritten_prompt": self.rewritten_prompt,
             "workflow": self.workflow,
@@ -97,6 +108,7 @@ class BackendResult:
     plans: list[IconPlan]
     artifacts: list[SvgArtifact]
     candidate_artifacts: list[SvgArtifact]
+    selected_artifacts: list[SvgArtifact]
     traces: list[BackendTrace]
     active_backend: str
     selection_briefs: dict[str, str] = field(default_factory=dict)
@@ -135,6 +147,8 @@ def generate_with_backend(
     workflow: str = "single",
     candidate_count: int = 3,
     rewrite_prompt: bool = True,
+    optimizer_feedback: str | None = None,
+    use_llm_optimizer_feedback: bool = True,
     progress: ProgressLogger | None = None,
 ) -> BackendResult:
     if backend != "openrouter":
@@ -177,6 +191,8 @@ def generate_with_backend(
         workflow=workflow,
         candidate_count=candidate_count,
         rewrite_prompt=rewrite_prompt,
+        optimizer_feedback=optimizer_feedback,
+        use_llm_optimizer_feedback=use_llm_optimizer_feedback,
         progress=logger,
     )
 
@@ -193,6 +209,8 @@ def _openrouter_backend(
     workflow: str,
     candidate_count: int,
     rewrite_prompt: bool,
+    optimizer_feedback: str | None,
+    use_llm_optimizer_feedback: bool,
     progress: ProgressLogger,
 ) -> BackendResult:
     prompt_rewriter = OpenRouterPromptRewriterAgent(client, max_tokens=max_tokens, reasoning=reasoning)
@@ -202,11 +220,13 @@ def _openrouter_backend(
     semantic_critic = OpenRouterSemanticCriticAgent(client, max_tokens=max_tokens, reasoning=reasoning)
     quality_critic = OpenRouterSvgQualityCriticAgent(client, max_tokens=max_tokens, reasoning=reasoning)
     selector = OpenRouterConsensusSelectorAgent(client, max_tokens=max_tokens, reasoning=reasoning)
+    optimizer = OpenRouterSvgOptimizerAgent(client, max_tokens=max_tokens, reasoning=reasoning)
     checker = SvgCheckTool()
 
     plans: list[IconPlan] = []
     artifacts: list[SvgArtifact] = []
     candidate_artifacts: list[SvgArtifact] = []
+    selected_artifacts: list[SvgArtifact] = []
     traces: list[BackendTrace] = []
     selection_briefs: dict[str, str] = {}
     raw_events: list[dict[str, Any]] = []
@@ -222,6 +242,8 @@ def _openrouter_backend(
             candidate_count=candidate_count if workflow == "collaborative" else 1,
             original_prompt=item.prompt,
             rewritten_prompt=item.prompt,
+            manual_optimizer_feedback=_clean_optional_text(optimizer_feedback),
+            use_llm_optimizer_feedback=use_llm_optimizer_feedback,
         )
 
         active_item = item
@@ -275,16 +297,20 @@ def _openrouter_backend(
                 semantic_critic=semantic_critic,
                 quality_critic=quality_critic,
                 selector=selector,
+                optimizer=optimizer,
                 checker=checker,
                 trace=trace,
                 raw_events=raw_events,
+                optimizer_feedback=optimizer_feedback,
+                use_llm_optimizer_feedback=use_llm_optimizer_feedback,
                 progress=progress,
             )
             if selected is None:
                 traces.append(trace)
                 continue
-            artifact, repair_brief, candidates = selected
+            artifact, repair_brief, candidates, selected_artifact = selected
             candidate_artifacts.extend(candidates)
+            selected_artifacts.append(selected_artifact)
             artifacts.append(artifact)
             if repair_brief:
                 selection_briefs[item.id] = repair_brief
@@ -312,6 +338,7 @@ def _openrouter_backend(
         plans=plans,
         artifacts=artifacts,
         candidate_artifacts=candidate_artifacts,
+        selected_artifacts=selected_artifacts,
         traces=traces,
         active_backend="openrouter",
         selection_briefs=selection_briefs,
@@ -330,11 +357,14 @@ def _collaborative_svg_draft(
     semantic_critic: OpenRouterSemanticCriticAgent,
     quality_critic: OpenRouterSvgQualityCriticAgent,
     selector: OpenRouterConsensusSelectorAgent,
+    optimizer: OpenRouterSvgOptimizerAgent,
     checker: SvgCheckTool,
     trace: BackendTrace,
     raw_events: list[dict[str, Any]],
+    optimizer_feedback: str | None,
+    use_llm_optimizer_feedback: bool,
     progress: ProgressLogger,
-) -> tuple[SvgArtifact, str, list[SvgArtifact]] | None:
+) -> tuple[SvgArtifact, str, list[SvgArtifact], SvgArtifact] | None:
     progress.log(f"[{index}/{total}] {plan.id}: requesting {candidate_count} LLM SVG candidates.")
     candidates: list[SvgArtifact] = []
     for candidate_index in range(1, candidate_count + 1):
@@ -399,7 +429,40 @@ def _collaborative_svg_draft(
     trace.selector_rationale = selection.rationale
     trace.selector_repair_brief = selection.repair_brief
     progress.log(f"[{index}/{total}] {plan.id}: selector chose {selection.winner_candidate_id}.")
-    return SvgArtifact(id=plan.id, stage="baseline", svg=winner.svg), selection.repair_brief, candidates
+    selected_artifact = SvgArtifact(id=plan.id, stage="selected", svg=winner.svg)
+    winner_report = checker.check(winner)
+    try:
+        progress.log(f"[{index}/{total}] {plan.id}: requesting SVG optimizer.")
+        optimized = optimizer.optimize(
+            plan,
+            selected_artifact,
+            critiques,
+            winner_report,
+            selection,
+            manual_feedback=optimizer_feedback,
+            use_llm_feedback=use_llm_optimizer_feedback,
+        )
+        trace.optimizer_backend = "openrouter"
+        trace.optimizer_applied = True
+        trace.optimizer_feedback_sources = list(optimized.feedback_sources)
+        trace.usage["optimizer"] = optimized.response.usage
+        raw_events.append(
+            _raw_event(
+                plan.id,
+                "svg-optimizer",
+                "success",
+                model,
+                response=optimized.response.raw,
+            )
+        )
+    except OpenRouterError as exc:
+        trace.optimizer_backend = "openrouter-error"
+        trace.errors.append(f"optimizer: {exc}")
+        raw_events.append(_raw_event(plan.id, "svg-optimizer", "error", model, error=exc))
+        progress.log(f"[{index}/{total}] {plan.id}: SVG optimizer failed; no local fallback generated.")
+        return None
+    progress.log(f"[{index}/{total}] {plan.id}: optimized baseline SVG ready.")
+    return optimized.artifact, selection.repair_brief, candidates, selected_artifact
 
 
 def _critic_scores(critiques: list[LlmCritiqueResult]) -> dict[str, dict[str, int]]:
@@ -446,3 +509,10 @@ def _raw_event(
     if candidate_id is not None:
         event["candidate_id"] = candidate_id
     return event
+
+
+def _clean_optional_text(value: str | None) -> str | None:
+    if not isinstance(value, str):
+        return None
+    cleaned = " ".join(value.strip().split())
+    return cleaned or None

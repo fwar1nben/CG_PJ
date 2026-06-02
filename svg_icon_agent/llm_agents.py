@@ -15,6 +15,7 @@ DEFAULT_PLANNER_MAX_TOKENS = 900
 DEFAULT_REWRITER_MAX_TOKENS = 700
 DEFAULT_SVG_MAX_TOKENS = 1800
 DEFAULT_VALIDATOR_MAX_TOKENS = 1200
+DEFAULT_OPTIMIZER_MAX_TOKENS = 2200
 DEFAULT_REFINER_MAX_TOKENS = 2200
 
 
@@ -47,6 +48,13 @@ class LlmValidationResult:
 class LlmRefinementResult:
     artifact: SvgArtifact
     response: OpenRouterResponse
+
+
+@dataclass(frozen=True)
+class LlmOptimizationResult:
+    artifact: SvgArtifact
+    response: OpenRouterResponse
+    feedback_sources: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -432,6 +440,65 @@ class OpenRouterConsensusSelectorAgent:
         return _coerce_selection(data, candidates, response)
 
 
+class OpenRouterSvgOptimizerAgent:
+    """Uses an OpenRouter model to optimize the selected SVG from agent feedback."""
+
+    def __init__(
+        self,
+        client: OpenRouterClient,
+        max_tokens: int | None = None,
+        reasoning: dict[str, Any] | None = None,
+    ) -> None:
+        self.client = client
+        self.max_tokens = max_tokens
+        self.reasoning = reasoning
+
+    def optimize(
+        self,
+        plan: IconPlan,
+        selected_artifact: SvgArtifact,
+        critiques: list[LlmCritiqueResult],
+        tool_report: ValidationReport,
+        selection: LlmSelectionResult,
+        *,
+        manual_feedback: str | None = None,
+        use_llm_feedback: bool = True,
+    ) -> LlmOptimizationResult:
+        feedback_sources = _optimizer_feedback_sources(manual_feedback, use_llm_feedback)
+        response = self.client.chat(
+            [
+                {
+                    "role": "system",
+                    "content": (
+                        "You are an SVG optimizer agent in a collaborative icon-generation team. "
+                        "Return only one complete SVG document. Do not include markdown, explanations, scripts, "
+                        "images, external assets, CSS, transforms, filters, gradients, text, or animations."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": _optimization_prompt(
+                        plan,
+                        selected_artifact,
+                        critiques,
+                        tool_report,
+                        selection,
+                        manual_feedback=manual_feedback,
+                        use_llm_feedback=use_llm_feedback,
+                    ),
+                },
+            ],
+            reasoning=self.reasoning,
+            temperature=0.18,
+            max_tokens=self.max_tokens or DEFAULT_OPTIMIZER_MAX_TOKENS,
+        )
+        return LlmOptimizationResult(
+            artifact=SvgArtifact(id=plan.id, stage="baseline", svg=_extract_svg(response.content)),
+            response=response,
+            feedback_sources=feedback_sources,
+        )
+
+
 class OpenRouterRefinerAgent:
     """Uses an OpenRouter model to return a repaired complete SVG document."""
 
@@ -674,6 +741,68 @@ Deterministic tool reports JSON:
 Candidates:
 {_candidate_svg_listing(candidates)}
 """
+
+
+def _optimization_prompt(
+    plan: IconPlan,
+    selected_artifact: SvgArtifact,
+    critiques: list[LlmCritiqueResult],
+    tool_report: ValidationReport,
+    selection: LlmSelectionResult,
+    *,
+    manual_feedback: str | None,
+    use_llm_feedback: bool,
+) -> str:
+    manual = manual_feedback.strip() if isinstance(manual_feedback, str) else ""
+    llm_context = ""
+    if use_llm_feedback:
+        llm_context = f"""
+LLM critic reports JSON:
+{json.dumps([_critique_result_json(result) for result in critiques], indent=2)}
+
+Consensus selector JSON:
+{json.dumps(selection.to_json(), indent=2)}
+"""
+    else:
+        llm_context = "\nLLM critic and selector feedback: disabled by user option.\n"
+
+    manual_context = manual if manual else "No manual optimizer feedback supplied."
+    return f"""Improve the selected SVG before final validation/refinement.
+Return only one complete SVG document.
+
+Hard requirements:
+- Canvas must be exactly <svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">.
+- Include <title> and <desc>.
+- Use only these SVG elements: svg, title, desc, path, circle, rect, line, polyline, polygon, ellipse.
+- Use only literal #RRGGBB colors plus white, black, none, or transparent.
+- Do not use style attributes, classes, defs, filters, gradients, transforms, text, script, image, foreignObject, animation, or external references.
+- Keep 4 to 20 drawing primitives.
+- Preserve the selected candidate's core silhouette and prompt semantics.
+- Apply manual feedback when it is supplied.
+- When LLM feedback is enabled, address the critic issues, selector risks, repair brief, and deterministic SVG check problems.
+- When LLM feedback is disabled, do not use critic or selector advice; rely only on the selected SVG, the icon plan, the deterministic SVG check, and manual feedback.
+
+Icon plan JSON:
+{json.dumps(plan.to_json(), indent=2)}
+
+Manual optimizer feedback:
+{manual_context}
+{llm_context}
+Deterministic SvgCheckTool report JSON:
+{json.dumps(tool_report.to_json(), indent=2)}
+
+Selected SVG to optimize:
+{selected_artifact.svg}
+"""
+
+
+def _optimizer_feedback_sources(manual_feedback: str | None, use_llm_feedback: bool) -> tuple[str, ...]:
+    sources = ["svg_check_tool"]
+    if use_llm_feedback:
+        sources.extend(["semantic_critic", "svg_quality_critic", "consensus_selector"])
+    if isinstance(manual_feedback, str) and manual_feedback.strip():
+        sources.append("manual_feedback")
+    return tuple(sources)
 
 
 def _candidate_svg_listing(candidates: list[SvgArtifact]) -> str:

@@ -25,10 +25,12 @@ from svg_icon_agent.llm_agents import (
     OpenRouterRefinerAgent,
     OpenRouterSemanticCriticAgent,
     OpenRouterSvgGeneratorAgent,
+    OpenRouterSvgOptimizerAgent,
     OpenRouterSvgQualityCriticAgent,
     OpenRouterValidatorAgent,
 )
 from svg_icon_agent.openrouter_client import OpenRouterClient, OpenRouterConfig, OpenRouterError, OpenRouterResponse
+from svg_icon_agent.models import SvgArtifact
 from svg_icon_agent.pipeline import make_reasoning_config
 from svg_icon_agent.prompts import load_prompts, make_prompt_from_text
 from svg_icon_agent.refiner import refine_artifacts
@@ -196,6 +198,16 @@ def _selection_response(winner="candidate-2"):
     )
 
 
+def _optimizer_response(svg=None):
+    optimized_svg = svg or VALID_SVG.replace("Cloud Download", "Optimized Cloud Download")
+    return OpenRouterResponse(
+        content=optimized_svg,
+        model="openai/gpt-oss-120b:free",
+        usage={"completion_tokens": 110},
+        raw={"choices": [{"message": {"content": optimized_svg}}]},
+    )
+
+
 def _collaborative_success_responses(item, winner="candidate-2"):
     candidate_ids = ["candidate-1", "candidate-2", "candidate-3"]
     return [
@@ -207,6 +219,7 @@ def _collaborative_success_responses(item, winner="candidate-2"):
         _critique_response(candidate_ids, scores=[72, 91, 84]),
         _critique_response(candidate_ids, scores=[80, 88, 82]),
         _selection_response(winner),
+        _optimizer_response(),
         _validation_response(valid=True, score=100, issues=[]),
     ]
 
@@ -273,6 +286,7 @@ class OpenRouterAgentBoundaryTests(unittest.TestCase):
             OpenRouterSemanticCriticAgent,
             OpenRouterSvgQualityCriticAgent,
             OpenRouterConsensusSelectorAgent,
+            OpenRouterSvgOptimizerAgent,
             OpenRouterValidatorAgent,
             OpenRouterRefinerAgent,
         ):
@@ -429,6 +443,89 @@ class OpenRouterPipelineTests(unittest.TestCase):
         self.assertEqual(selection.winner_candidate_id, "candidate-2")
         self.assertIn("silhouette", selection.repair_brief)
 
+    def test_optimizer_uses_llm_and_manual_feedback(self) -> None:
+        item = load_prompts(PROMPT_PATH)[0]
+        plan_result = OpenRouterPlannerAgent(FakeOpenRouterClient([_plan_response(item)])).plan(item)
+        selected = SvgArtifact(id=item.id, stage="selected", svg=VALID_SVG)
+        semantic = _critique_response(["candidate-2"], scores=[91])
+        quality = _critique_response(["candidate-2"], scores=[88])
+        client = FakeOpenRouterClient(
+            [
+                semantic,
+                quality,
+                _selection_response("candidate-2"),
+                _optimizer_response(),
+            ]
+        )
+        candidates = [SvgArtifact(id=item.id, stage="candidate-2", svg=VALID_SVG)]
+        tool_reports = [SvgCheckTool().check(candidates[0])]
+        semantic_result = OpenRouterSemanticCriticAgent(client).critique(plan_result.plan, candidates)
+        quality_result = OpenRouterSvgQualityCriticAgent(client).critique(plan_result.plan, candidates, tool_reports)
+        selection = OpenRouterConsensusSelectorAgent(client).select(
+            plan_result.plan,
+            candidates,
+            [semantic_result, quality_result],
+            tool_reports,
+        )
+
+        result = OpenRouterSvgOptimizerAgent(client).optimize(
+            plan_result.plan,
+            selected,
+            [semantic_result, quality_result],
+            tool_reports[0],
+            selection,
+            manual_feedback="make the arrow stronger",
+            use_llm_feedback=True,
+        )
+
+        self.assertEqual(result.artifact.stage, "baseline")
+        self.assertIn("manual_feedback", result.feedback_sources)
+        optimizer_prompt = client.calls[-1]["messages"][1]["content"]
+        self.assertIn("make the arrow stronger", optimizer_prompt)
+        self.assertIn("LLM critic reports JSON", optimizer_prompt)
+        self.assertIn("Consensus selector JSON", optimizer_prompt)
+
+    def test_optimizer_can_disable_llm_feedback(self) -> None:
+        item = load_prompts(PROMPT_PATH)[0]
+        plan_result = OpenRouterPlannerAgent(FakeOpenRouterClient([_plan_response(item)])).plan(item)
+        selected = SvgArtifact(id=item.id, stage="selected", svg=VALID_SVG)
+        selection = type(
+            "Selection",
+            (),
+            {
+                "winner_candidate_id": "candidate-1",
+                "rationale": "Do not leak this rationale.",
+                "risks": ("Do not leak this risk.",),
+                "repair_brief": "Do not leak this repair brief.",
+                "to_json": lambda self: {
+                    "winner_candidate_id": self.winner_candidate_id,
+                    "rationale": self.rationale,
+                    "risks": list(self.risks),
+                    "repair_brief": self.repair_brief,
+                },
+            },
+        )()
+        tool_report = SvgCheckTool().check(selected)
+        client = FakeOpenRouterClient([_optimizer_response()])
+
+        result = OpenRouterSvgOptimizerAgent(client).optimize(
+            plan_result.plan,
+            selected,
+            [],
+            tool_report,
+            selection,
+            manual_feedback="increase negative space",
+            use_llm_feedback=False,
+        )
+
+        prompt = client.calls[0]["messages"][1]["content"]
+        self.assertEqual(result.feedback_sources, ("svg_check_tool", "manual_feedback"))
+        self.assertIn("increase negative space", prompt)
+        self.assertIn("Deterministic SvgCheckTool report JSON", prompt)
+        self.assertNotIn("LLM critic reports JSON", prompt)
+        self.assertNotIn("Do not leak this rationale", prompt)
+        self.assertNotIn("Do not leak this repair brief", prompt)
+
     def test_collaborative_backend_selects_candidate_and_records_trace(self) -> None:
         item = load_prompts(PROMPT_PATH)[0]
         client = FakeOpenRouterClient(_collaborative_success_responses(item)[:-1])
@@ -445,12 +542,17 @@ class OpenRouterPipelineTests(unittest.TestCase):
 
         self.assertEqual(len(backend.artifacts), 1)
         self.assertEqual(len(backend.candidate_artifacts), 3)
+        self.assertEqual(len(backend.selected_artifacts), 1)
         self.assertEqual(backend.traces[0].rewriter_backend, "openrouter")
         self.assertEqual(backend.traces[0].original_prompt, item.prompt)
         self.assertEqual(backend.traces[0].rewritten_prompt, item.prompt)
         self.assertEqual(backend.traces[0].workflow, "collaborative")
         self.assertEqual(backend.traces[0].selected_candidate_id, "candidate-2")
         self.assertEqual(backend.traces[0].svg_backend, "openrouter-collaborative")
+        self.assertEqual(backend.traces[0].optimizer_backend, "openrouter")
+        self.assertTrue(backend.traces[0].optimizer_applied)
+        self.assertIn("semantic_critic", backend.traces[0].optimizer_feedback_sources)
+        self.assertIn("optimizer", backend.traces[0].usage)
         self.assertIn("semantic", backend.traces[0].critic_scores)
         self.assertIn("semantic", backend.traces[0].critic_reports)
         self.assertEqual(
@@ -458,6 +560,27 @@ class OpenRouterPipelineTests(unittest.TestCase):
             "Keep this candidate concise.",
         )
         self.assertIn(item.id, backend.selection_briefs)
+
+    def test_collaborative_optimizer_failure_does_not_use_selected_as_baseline(self) -> None:
+        item = load_prompts(PROMPT_PATH)[0]
+        responses = _collaborative_success_responses(item)[:-2]
+        responses.append(OpenRouterError("optimizer failed", debug_payload={"stage": "optimizer"}))
+        client = FakeOpenRouterClient(responses)
+
+        backend = generate_with_backend(
+            [item],
+            backend="openrouter",
+            model="openai/gpt-oss-120b:free",
+            llm_stage="plan-svg",
+            workflow="collaborative",
+            candidate_count=3,
+            client=client,
+        )
+
+        self.assertEqual(backend.artifacts, [])
+        self.assertEqual(backend.traces[0].optimizer_backend, "openrouter-error")
+        self.assertFalse(backend.traces[0].optimizer_applied)
+        self.assertIn("optimizer failed", backend.traces[0].errors[-1])
 
     def test_openrouter_failure_does_not_fall_back_to_local_svg(self) -> None:
         item = load_prompts(PROMPT_PATH)[0]
@@ -684,16 +807,51 @@ class WebAppTests(unittest.TestCase):
             self.assertTrue(data["rewrite_prompt"])
             self.assertEqual(data["candidate_count"], 3)
             self.assertEqual(len(data["artifacts"]["candidates"]), 3)
+            self.assertIn("selected_svg_text", data["artifacts"])
+            self.assertIn("baseline_svg_text", data["artifacts"])
             self.assertEqual(data["trace"][0]["rewriter_backend"], "openrouter")
             self.assertEqual(data["trace"][0]["original_prompt"], prompt)
             self.assertEqual(data["trace"][0]["rewritten_prompt"], prompt)
             self.assertEqual(data["trace"][0]["selected_candidate_id"], "candidate-2")
             self.assertEqual(data["trace"][0]["svg_backend"], "openrouter-collaborative")
+            self.assertEqual(data["trace"][0]["optimizer_backend"], "openrouter")
+            self.assertTrue(data["trace"][0]["optimizer_applied"])
+            self.assertIn("svg_check_tool", data["trace"][0]["optimizer_feedback_sources"])
             self.assertEqual(data["trace"][0]["critic_reports"]["semantic"]["candidate-2"]["score"], 91)
             self.assertEqual(
                 data["trace"][0]["critic_reports"]["svg-quality"]["candidate-2"]["recommendation"],
                 "Keep this candidate concise.",
             )
+
+    def test_web_accepts_optimizer_feedback_options(self) -> None:
+        prompt = "a minimal cloud download icon with a clear arrow"
+        item = make_prompt_from_text(prompt, source="web")
+        fake_client = FakeOpenRouterClient(_collaborative_success_responses(item))
+        with tempfile.TemporaryDirectory() as tmp:
+            app = create_app(
+                output_root=Path(tmp),
+                client_factory=lambda model, timeout, retries: fake_client,
+                run_async=False,
+            )
+
+            response = app.test_client().post(
+                "/api/runs",
+                json={
+                    "prompt": prompt,
+                    "workflow": "collaborative",
+                    "candidate_count": 3,
+                    "optimizer_feedback": "make the cloud more compact",
+                    "use_llm_optimizer_feedback": False,
+                },
+            )
+            data = response.get_json()
+
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(data["optimizer_feedback"], "make the cloud more compact")
+            self.assertFalse(data["use_llm_optimizer_feedback"])
+            self.assertEqual(data["trace"][0]["manual_optimizer_feedback"], "make the cloud more compact")
+            self.assertFalse(data["trace"][0]["use_llm_optimizer_feedback"])
+            self.assertEqual(data["trace"][0]["optimizer_feedback_sources"], ["svg_check_tool", "manual_feedback"])
 
     def test_web_returns_rewritten_prompt_before_run_finishes(self) -> None:
         prompt = "rocket"

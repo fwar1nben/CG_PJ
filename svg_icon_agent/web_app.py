@@ -37,6 +37,8 @@ class WebRun:
     workflow: str
     candidate_count: int
     rewrite_prompt: bool
+    optimizer_feedback: str | None
+    use_llm_optimizer_feedback: bool
     status: str = "queued"
     error: str | None = None
     created_at: float = field(default_factory=time.time)
@@ -81,6 +83,8 @@ def create_app(
         workflow = _workflow_value(payload.get("workflow"))
         candidate_count = _int_value(payload.get("candidate_count"), 3, minimum=1, maximum=6)
         rewrite_prompt = bool(payload.get("rewrite_prompt", True))
+        optimizer_feedback = _optional_text_value(payload.get("optimizer_feedback"))
+        use_llm_optimizer_feedback = bool(payload.get("use_llm_optimizer_feedback", True))
         run_id = f"{int(time.time())}-{uuid.uuid4().hex[:8]}"
         run = WebRun(
             id=run_id,
@@ -97,6 +101,8 @@ def create_app(
             workflow=workflow,
             candidate_count=candidate_count,
             rewrite_prompt=rewrite_prompt,
+            optimizer_feedback=optimizer_feedback,
+            use_llm_optimizer_feedback=use_llm_optimizer_feedback,
         )
         with lock:
             runs[run_id] = run
@@ -139,6 +145,8 @@ def create_app(
                 workflow="collaborative",
                 candidate_count=3,
                 rewrite_prompt=True,
+                optimizer_feedback=None,
+                use_llm_optimizer_feedback=True,
             )
             run.status = "completed" if (output_dir / "metrics.json").exists() else "failed"
         return jsonify(_run_payload(run))
@@ -176,6 +184,8 @@ def _execute_run(run: WebRun, client_factory: ClientFactory | None) -> None:
             workflow=run.workflow,
             candidate_count=run.candidate_count,
             rewrite_prompt=run.rewrite_prompt,
+            optimizer_feedback=run.optimizer_feedback,
+            use_llm_optimizer_feedback=run.use_llm_optimizer_feedback,
             client=client,
             progress=logger,
         )
@@ -203,6 +213,8 @@ def _run_payload(run: WebRun, *, include_files: bool = True) -> dict[str, Any]:
         "workflow": run.workflow,
         "candidate_count": run.candidate_count,
         "rewrite_prompt": run.rewrite_prompt,
+        "optimizer_feedback": run.optimizer_feedback,
+        "use_llm_optimizer_feedback": run.use_llm_optimizer_feedback,
         "status": run.status,
         "error": run.error,
         "created_at": run.created_at,
@@ -244,6 +256,7 @@ def _artifact_payload(run: WebRun) -> dict[str, Any]:
     if not artifact_id:
         return {}
     files = {
+        "selected_svg": Path("selected") / f"{artifact_id}.svg",
         "baseline_svg": Path("baseline") / f"{artifact_id}.svg",
         "refined_svg": Path("refined") / f"{artifact_id}.svg",
         "baseline_png": Path("png/baseline") / f"{artifact_id}.png",
@@ -255,8 +268,11 @@ def _artifact_payload(run: WebRun) -> dict[str, Any]:
         path = run.output_dir / relative
         if path.exists():
             artifacts[f"{key}_url"] = url_for("web_outputs", run_id=run.id, filename=str(relative))
+    selected_svg = run.output_dir / files["selected_svg"]
     baseline_svg = run.output_dir / files["baseline_svg"]
     refined_svg = run.output_dir / files["refined_svg"]
+    if selected_svg.exists():
+        artifacts["selected_svg_text"] = selected_svg.read_text(encoding="utf-8")
     if baseline_svg.exists():
         artifacts["baseline_svg_text"] = baseline_svg.read_text(encoding="utf-8")
     if refined_svg.exists():
@@ -337,6 +353,13 @@ def _optional_int_value(value: Any, *, minimum: int, maximum: int) -> int | None
     except (TypeError, ValueError):
         return None
     return max(minimum, min(maximum, parsed))
+
+
+def _optional_text_value(value: Any) -> str | None:
+    if not isinstance(value, str):
+        return None
+    cleaned = " ".join(value.strip().split())
+    return cleaned or None
 
 
 def _reasoning_effort_value(value: Any) -> str | None:
@@ -480,6 +503,15 @@ _INDEX_HTML = """<!doctype html>
       font-size: 13px;
       line-height: 1.45;
     }
+    .optimizer-summary {
+      border-top: 1px solid var(--line);
+      padding-top: 10px;
+      display: grid;
+      gap: 6px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.4;
+    }
     .pill {
       display: inline-flex;
       align-items: center;
@@ -492,7 +524,7 @@ _INDEX_HTML = """<!doctype html>
     }
     .previews {
       display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
+      grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: 16px;
       padding: 16px;
     }
@@ -677,6 +709,14 @@ _INDEX_HTML = """<!doctype html>
         <input id="rewritePrompt" type="checkbox" checked>
         Prompt Rewriter Agent
       </label>
+      <label>
+        <input id="useLlmOptimizerFeedback" type="checkbox" checked>
+        Use LLM feedback
+      </label>
+      <div>
+        <label for="optimizerFeedback">Optimizer feedback</label>
+        <textarea id="optimizerFeedback" style="min-height: 86px" placeholder="Optional manual improvement advice"></textarea>
+      </div>
       <div class="row">
         <div>
           <label for="rounds">Repair rounds</label>
@@ -722,6 +762,7 @@ _INDEX_HTML = """<!doctype html>
           <span id="runId" class="pill">No run</span>
           <span id="runState" class="pill">idle</span>
         </div>
+        <div id="optimizerSummary" class="optimizer-summary">Waiting for SVG Optimizer Agent context</div>
       </section>
       <section class="prompt-panel">
         <h2>Prompt Rewrite</h2>
@@ -738,9 +779,14 @@ _INDEX_HTML = """<!doctype html>
       </section>
       <section class="previews">
         <figure>
-          <div class="figure-title">Baseline SVG</div>
+          <div class="figure-title">Selected SVG</div>
+          <div id="selectedSvg" class="preview-box svg-preview"><div class="empty">No selected SVG</div></div>
+          <figcaption id="selectedCaption">Waiting for Consensus Selector Agent</figcaption>
+        </figure>
+        <figure>
+          <div class="figure-title">Optimized Baseline SVG</div>
           <div id="baselineSvg" class="preview-box svg-preview"><div class="empty">No baseline SVG</div></div>
-          <figcaption id="baselineCaption">Waiting for SVG Generator Agent</figcaption>
+          <figcaption id="baselineCaption">Waiting for SVG Optimizer Agent</figcaption>
         </figure>
         <figure>
           <div class="figure-title">Refined PNG</div>
@@ -793,7 +839,9 @@ _INDEX_HTML = """<!doctype html>
         empty_response_retries: Number(document.getElementById('emptyRetries').value),
         max_tokens: Number(document.getElementById('maxTokens').value) || null,
         reasoning_effort: document.getElementById('reasoningEffort').value,
-        reasoning_max_tokens: Number(document.getElementById('reasoningTokens').value) || null
+        reasoning_max_tokens: Number(document.getElementById('reasoningTokens').value) || null,
+        optimizer_feedback: document.getElementById('optimizerFeedback').value,
+        use_llm_optimizer_feedback: document.getElementById('useLlmOptimizerFeedback').checked
       };
       runButton.disabled = true;
       setStatus('Submitting run...', '');
@@ -834,6 +882,7 @@ _INDEX_HTML = """<!doctype html>
       renderJson('trace', data.trace || data.summary || {});
       renderJson('raw', data.raw_events || []);
       renderPromptRewrite(data);
+      renderOptimizerContext(data);
       renderArtifacts(data.artifacts || {});
       renderCandidates((data.artifacts || {}).candidates || [], data.trace || []);
     }
@@ -871,10 +920,13 @@ _INDEX_HTML = """<!doctype html>
     }
 
     function renderArtifacts(artifacts) {
+      const selected = document.getElementById('selectedSvg');
       const baseline = document.getElementById('baselineSvg');
       const refined = document.getElementById('refinedPng');
-      document.getElementById('baselineCaption').textContent = artifacts.baseline_svg_url || 'Waiting for SVG Generator Agent';
+      document.getElementById('selectedCaption').textContent = artifacts.selected_svg_url || 'Waiting for Consensus Selector Agent';
+      document.getElementById('baselineCaption').textContent = artifacts.baseline_svg_url || 'Waiting for SVG Optimizer Agent';
       document.getElementById('refinedCaption').textContent = artifacts.refined_png_url || 'Waiting for Refiner Agent';
+      selected.innerHTML = artifacts.selected_svg_text ? artifacts.selected_svg_text : '<div class="empty">No selected SVG</div>';
       baseline.innerHTML = artifacts.baseline_svg_text ? artifacts.baseline_svg_text : '<div class="empty">No baseline SVG</div>';
       refined.innerHTML = artifacts.refined_png_url ? `<img src="${artifacts.refined_png_url}" alt="Refined PNG">` : '<div class="empty">No refined PNG</div>';
     }
@@ -886,6 +938,22 @@ _INDEX_HTML = """<!doctype html>
         liveRewrite.original_prompt || traceItem.original_prompt || data.prompt || 'Waiting for input';
       document.getElementById('rewrittenPrompt').textContent =
         liveRewrite.rewritten_prompt || traceItem.rewritten_prompt || 'Waiting for Prompt Rewriter Agent';
+    }
+
+    function renderOptimizerContext(data) {
+      const traceItem = data.trace && data.trace[0] ? data.trace[0] : {};
+      const manual = traceItem.manual_optimizer_feedback || data.optimizer_feedback || 'none';
+      const useLlm = traceItem.use_llm_optimizer_feedback !== undefined
+        ? traceItem.use_llm_optimizer_feedback
+        : data.use_llm_optimizer_feedback;
+      const sources = Array.isArray(traceItem.optimizer_feedback_sources) && traceItem.optimizer_feedback_sources.length
+        ? traceItem.optimizer_feedback_sources.join(', ')
+        : 'waiting';
+      document.getElementById('optimizerSummary').innerHTML = `
+        <div><strong>Manual feedback:</strong> ${escapeHtml(manual)}</div>
+        <div><strong>Use LLM feedback:</strong> ${escapeHtml(useLlm)}</div>
+        <div><strong>Feedback sources:</strong> ${escapeHtml(sources)}</div>
+      `;
     }
 
     function renderCandidates(candidates, trace) {

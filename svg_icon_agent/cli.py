@@ -46,6 +46,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="Disable the Prompt Rewriter Agent for ablation.",
     )
     parser.add_argument(
+        "--optimizer-feedback",
+        help="Manual improvement feedback for the SVG Optimizer Agent in collaborative workflow.",
+    )
+    parser.add_argument(
+        "--no-llm-optimizer-feedback",
+        action="store_true",
+        help="Use only manual feedback and SvgCheckTool context in the SVG Optimizer Agent.",
+    )
+    parser.add_argument(
         "--request-timeout",
         type=float,
         default=60.0,
@@ -122,6 +131,8 @@ def main(argv: list[str] | None = None) -> int:
         workflow=args.workflow,
         candidate_count=args.candidate_count,
         rewrite_prompt=not args.no_prompt_rewrite,
+        optimizer_feedback=args.optimizer_feedback,
+        use_llm_optimizer_feedback=not args.no_llm_optimizer_feedback,
         progress=progress,
     )
     if result.status != "completed":
