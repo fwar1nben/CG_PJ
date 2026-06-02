@@ -353,6 +353,11 @@ class OpenRouterPipelineTests(unittest.TestCase):
         self.assertEqual(backend.traces[0].selected_candidate_id, "candidate-2")
         self.assertEqual(backend.traces[0].svg_backend, "openrouter-collaborative")
         self.assertIn("semantic", backend.traces[0].critic_scores)
+        self.assertIn("semantic", backend.traces[0].critic_reports)
+        self.assertEqual(
+            backend.traces[0].critic_reports["semantic"]["candidate-2"]["recommendation"],
+            "Keep this candidate concise.",
+        )
         self.assertIn(item.id, backend.selection_briefs)
 
     def test_openrouter_failure_does_not_fall_back_to_local_svg(self) -> None:
@@ -566,6 +571,11 @@ class WebAppTests(unittest.TestCase):
             self.assertEqual(len(data["artifacts"]["candidates"]), 3)
             self.assertEqual(data["trace"][0]["selected_candidate_id"], "candidate-2")
             self.assertEqual(data["trace"][0]["svg_backend"], "openrouter-collaborative")
+            self.assertEqual(data["trace"][0]["critic_reports"]["semantic"]["candidate-2"]["score"], 91)
+            self.assertEqual(
+                data["trace"][0]["critic_reports"]["svg-quality"]["candidate-2"]["recommendation"],
+                "Keep this candidate concise.",
+            )
 
     def test_web_outputs_route_serves_png_from_relative_output_root(self) -> None:
         with tempfile.TemporaryDirectory(dir=".") as tmp:

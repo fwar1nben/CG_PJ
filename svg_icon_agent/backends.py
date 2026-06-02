@@ -43,6 +43,7 @@ class BackendTrace:
     selector_repair_brief: str | None = None
     candidate_tool_scores: dict[str, int] = field(default_factory=dict)
     critic_scores: dict[str, dict[str, int]] = field(default_factory=dict)
+    critic_reports: dict[str, dict[str, Any]] = field(default_factory=dict)
     fallback_reason: str | None = None
     usage: dict[str, Any] = field(default_factory=dict)
     errors: list[str] = field(default_factory=list)
@@ -68,6 +69,7 @@ class BackendTrace:
             "selector_repair_brief": self.selector_repair_brief,
             "candidate_tool_scores": self.candidate_tool_scores,
             "critic_scores": self.critic_scores,
+            "critic_reports": self.critic_reports,
             "fallback_reason": self.fallback_reason,
             "usage": self.usage,
             "errors": self.errors,
@@ -330,6 +332,7 @@ def _collaborative_svg_draft(
 
         critiques = [semantic, quality]
         trace.critic_scores = _critic_scores(critiques)
+        trace.critic_reports = _critic_reports(critiques)
 
         progress.log(f"[{index}/{total}] {plan.id}: requesting consensus selector.")
         selection = selector.select(plan, candidates, critiques, tool_reports)
@@ -356,6 +359,16 @@ def _critic_scores(critiques: list[LlmCritiqueResult]) -> dict[str, dict[str, in
     return {
         result.perspective: {
             critique.candidate_id: critique.score
+            for critique in result.critiques
+        }
+        for result in critiques
+    }
+
+
+def _critic_reports(critiques: list[LlmCritiqueResult]) -> dict[str, dict[str, Any]]:
+    return {
+        result.perspective: {
+            critique.candidate_id: critique.to_json()
             for critique in result.critiques
         }
         for result in critiques

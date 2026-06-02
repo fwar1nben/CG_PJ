@@ -471,6 +471,33 @@ _INDEX_HTML = """<!doctype html>
       font-weight: 700;
       font-size: 13px;
     }
+    .candidate-meta {
+      border-top: 1px solid var(--line);
+      padding: 10px 12px;
+      display: grid;
+      gap: 8px;
+      background: #ffffff;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .score-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .score-chip {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 3px 7px;
+      color: var(--ink);
+      background: #f8fafc;
+      font-weight: 700;
+    }
+    .critic-note {
+      border-left: 3px solid var(--line);
+      padding-left: 8px;
+      line-height: 1.35;
+    }
     .preview-box {
       min-height: 0;
       display: grid;
@@ -777,12 +804,53 @@ _INDEX_HTML = """<!doctype html>
         return;
       }
       const winner = trace && trace[0] ? trace[0].selected_candidate_id : null;
+      const traceItem = trace && trace[0] ? trace[0] : {};
       grid.innerHTML = candidates.map((candidate) => `
         <figure>
           <div class="figure-title">${escapeHtml(candidate.id)}${candidate.id === winner ? ' selected' : ''}</div>
           <div class="preview-box svg-preview">${candidate.svg_text || '<div class="empty">No SVG</div>'}</div>
+          ${renderCandidateMeta(candidate.id, traceItem)}
         </figure>
       `).join('');
+    }
+
+    function renderCandidateMeta(candidateId, traceItem) {
+      const toolScore = traceItem.candidate_tool_scores ? traceItem.candidate_tool_scores[candidateId] : undefined;
+      const semantic = traceItem.critic_reports && traceItem.critic_reports.semantic
+        ? traceItem.critic_reports.semantic[candidateId]
+        : null;
+      const quality = traceItem.critic_reports && traceItem.critic_reports['svg-quality']
+        ? traceItem.critic_reports['svg-quality'][candidateId]
+        : null;
+      return `
+        <div class="candidate-meta">
+          <div class="score-row">
+            ${scoreChip('Tool', toolScore)}
+            ${scoreChip('Semantic', semantic && semantic.score)}
+            ${scoreChip('SVG quality', quality && quality.score)}
+          </div>
+          ${criticNote('Semantic', semantic)}
+          ${criticNote('SVG quality', quality)}
+        </div>
+      `;
+    }
+
+    function scoreChip(label, score) {
+      return `<span class="score-chip">${escapeHtml(label)} ${score === undefined || score === null ? '-' : escapeHtml(score)}</span>`;
+    }
+
+    function criticNote(label, report) {
+      if (!report) return `<div class="critic-note">${escapeHtml(label)}: waiting for critique</div>`;
+      const strengths = Array.isArray(report.strengths) && report.strengths.length ? report.strengths.join('; ') : 'no strengths listed';
+      const issues = Array.isArray(report.issues) && report.issues.length ? report.issues.join('; ') : 'no issues listed';
+      return `
+        <div class="critic-note">
+          <strong>${escapeHtml(label)}</strong><br>
+          Strengths: ${escapeHtml(strengths)}<br>
+          Issues: ${escapeHtml(issues)}<br>
+          Recommendation: ${escapeHtml(report.recommendation || 'none')}
+        </div>
+      `;
     }
 
     function escapeHtml(value) {
