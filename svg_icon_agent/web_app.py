@@ -503,7 +503,7 @@ def _artifact_payload(run: WebRun) -> dict[str, Any]:
     for key, relative in files.items():
         path = run.output_dir / relative
         if path.exists():
-            artifacts[f"{key}_url"] = url_for("web_outputs", run_id=run.id, filename=str(relative))
+            artifacts[f"{key}_url"] = _versioned_output_url(run, relative, path)
     selected_svg = run.output_dir / files["selected_svg"]
     baseline_svg = run.output_dir / files["baseline_svg"]
     refined_svg = run.output_dir / files["refined_svg"]
@@ -520,12 +520,16 @@ def _artifact_payload(run: WebRun) -> dict[str, Any]:
         candidate = {
             "id": path.stem.replace(f"{artifact_id}-", ""),
             "svg_text": path.read_text(encoding="utf-8"),
-            "svg_url": url_for("web_outputs", run_id=run.id, filename=str(relative)),
+            "svg_url": _versioned_output_url(run, relative, path),
         }
         candidates.append(candidate)
     if candidates:
         artifacts["candidates"] = candidates
     return artifacts
+
+
+def _versioned_output_url(run: WebRun, relative: Path, path: Path) -> str:
+    return url_for("web_outputs", run_id=run.id, filename=str(relative), v=path.stat().st_mtime_ns)
 
 
 def _load_run_plan(output_dir: Path) -> IconPlan:

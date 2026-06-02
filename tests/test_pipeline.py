@@ -876,6 +876,8 @@ class WebAppTests(unittest.TestCase):
                 "/api/runs",
                 json={"prompt": prompt, "workflow": "collaborative", "candidate_count": 3},
             ).get_json()
+            initial_png_url = initial["artifacts"]["refined_png_url"]
+            time.sleep(0.001)
             response = client.post(
                 f"/api/runs/{initial['id']}/optimize",
                 json={
@@ -889,6 +891,8 @@ class WebAppTests(unittest.TestCase):
             self.assertEqual(data["status"], "completed")
             self.assertIn("Post Optimized Cloud Download", data["artifacts"]["baseline_svg_text"])
             self.assertIn("Post Optimized Cloud Download", data["artifacts"]["refined_svg_text"])
+            self.assertIn("v=", data["artifacts"]["refined_png_url"])
+            self.assertNotEqual(data["artifacts"]["refined_png_url"], initial_png_url)
             self.assertEqual(data["trace"][0]["post_run_optimizer_backend"], "openrouter")
             self.assertTrue(data["trace"][0]["post_run_optimizer_applied"])
             self.assertEqual(data["trace"][0]["post_run_optimizer_feedback"], "make the arrow larger and simplify the cloud")
