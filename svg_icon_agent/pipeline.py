@@ -9,7 +9,9 @@ from typing import Any
 
 from svg_icon_agent.backends import BackendTrace, OpenRouterClient, create_openrouter_client, generate_with_backend
 from svg_icon_agent.exporter import export_artifacts
-from svg_icon_agent.models import IconPlan, SvgArtifact, ValidationReport
+from svg_icon_agent.llm_agents import OpenRouterMemoryCuratorAgent
+from svg_icon_agent.memory import MemoryContext, MemoryRetrievalTool, record_from_curated_json
+from svg_icon_agent.models import GenerationGoal, IconPlan, SvgArtifact, ValidationReport
 from svg_icon_agent.openrouter_client import DEFAULT_OPENROUTER_MODEL, OpenRouterError
 from svg_icon_agent.progress import ProgressLogger
 from svg_icon_agent.prompts import PromptItem
@@ -54,6 +56,8 @@ class PipelineRunResult:
     status: str
     output_dir: Path
     prompts: list[PromptItem]
+    goals: dict[str, GenerationGoal]
+    memory_contexts: dict[str, MemoryContext]
     plans: list[IconPlan]
     candidate_artifacts: list[SvgArtifact]
     selected_artifacts: list[SvgArtifact]
@@ -83,6 +87,12 @@ def run_single_prompt_pipeline(
     workflow: str = "collaborative",
     candidate_count: int = 3,
     rewrite_prompt: bool = True,
+    manual_goal: str | None = None,
+    memory_enabled: bool = True,
+    memory_top_k: int = 3,
+    rebuild_memory_index: bool = False,
+    memory_index_path: Path | None = None,
+    memory_outputs_root: Path | None = None,
     optimizer_feedback: str | None = None,
     use_llm_optimizer_feedback: bool = True,
     client: OpenRouterClient | None = None,
@@ -102,6 +112,12 @@ def run_single_prompt_pipeline(
         workflow=workflow,
         candidate_count=candidate_count,
         rewrite_prompt=rewrite_prompt,
+        manual_goal=manual_goal,
+        memory_enabled=memory_enabled,
+        memory_top_k=memory_top_k,
+        rebuild_memory_index=rebuild_memory_index,
+        memory_index_path=memory_index_path,
+        memory_outputs_root=memory_outputs_root,
         optimizer_feedback=optimizer_feedback,
         use_llm_optimizer_feedback=use_llm_optimizer_feedback,
         client=client,
@@ -124,6 +140,12 @@ def run_prompt_pipeline(
     workflow: str = "collaborative",
     candidate_count: int = 3,
     rewrite_prompt: bool = True,
+    manual_goal: str | None = None,
+    memory_enabled: bool = True,
+    memory_top_k: int = 3,
+    rebuild_memory_index: bool = False,
+    memory_index_path: Path | None = None,
+    memory_outputs_root: Path | None = None,
     optimizer_feedback: str | None = None,
     use_llm_optimizer_feedback: bool = True,
     client: OpenRouterClient | None = None,
@@ -141,6 +163,18 @@ def run_prompt_pipeline(
     refined_dir.mkdir(parents=True, exist_ok=True)
 
     logger.log(f"Loaded {len(prompts)} prompt(s).")
+    memory_tool = MemoryRetrievalTool(memory_index_path or Path("outputs/memory/memory_index.jsonl"))
+    outputs_root = memory_outputs_root or Path("outputs")
+    if rebuild_memory_index:
+        logger.log("Rebuilding local memory index.")
+        memory_tool.rebuild_from_outputs(outputs_root)
+    memory_contexts = _retrieve_memory_contexts(
+        prompts,
+        memory_tool=memory_tool,
+        enabled=memory_enabled,
+        top_k=memory_top_k,
+        manual_goal=manual_goal,
+    )
     try:
         active_client = client or create_openrouter_client(
             model=model,
@@ -162,6 +196,10 @@ def run_prompt_pipeline(
             workflow=workflow,
             candidate_count=candidate_count,
             rewrite_prompt=rewrite_prompt,
+            manual_goal=manual_goal,
+            memory_contexts=memory_contexts,
+            memory_enabled=memory_enabled,
+            memory_top_k=memory_top_k,
             optimizer_feedback=optimizer_feedback,
             use_llm_optimizer_feedback=use_llm_optimizer_feedback,
             progress=logger,
@@ -172,6 +210,8 @@ def run_prompt_pipeline(
             status="failed",
             output_dir=output_dir,
             prompts=prompts,
+            goals={},
+            memory_contexts=memory_contexts,
             plans=[],
             candidate_artifacts=[],
             selected_artifacts=[],
@@ -186,6 +226,7 @@ def run_prompt_pipeline(
         )
 
     plans = backend_result.plans
+    goals = backend_result.goals
     artifacts = backend_result.artifacts
     candidate_artifacts = backend_result.candidate_artifacts
     selected_artifacts = backend_result.selected_artifacts
@@ -212,6 +253,8 @@ def run_prompt_pipeline(
             status="failed",
             output_dir=output_dir,
             prompts=prompts,
+            goals=goals,
+            memory_contexts=memory_contexts,
             plans=plans,
             candidate_artifacts=candidate_artifacts,
             selected_artifacts=selected_artifacts,
@@ -254,6 +297,8 @@ def run_prompt_pipeline(
     logger.log("Writing JSON reports and LLM trace.")
     _write_json_outputs(
         output_dir=output_dir,
+        goals=goals,
+        memory_contexts=memory_contexts,
         plans=plans,
         baseline_reports=baseline_reports,
         refined_reports=refined_reports,
@@ -272,11 +317,31 @@ def run_prompt_pipeline(
         refined_reports=refined_reports,
         refinements=refinements,
     )
+    raw_events.extend(
+        _curate_memories(
+            prompts=successful_prompts,
+            plans=plans,
+            goals=goals,
+            memory_contexts=memory_contexts,
+            traces=backend_result.traces,
+            metrics=summary,
+            memory_tool=memory_tool,
+            client=active_client,
+            model=model,
+            max_tokens=max_tokens,
+            reasoning=reasoning,
+            output_dir=output_dir,
+            logger=logger,
+        )
+    )
+    _write_trace_outputs(output_dir, backend_result.traces, raw_events, baseline_reports, refined_reports)
     logger.log("Pipeline complete.")
     return PipelineRunResult(
         status="completed",
         output_dir=output_dir,
         prompts=prompts,
+        goals=goals,
+        memory_contexts=memory_contexts,
         plans=plans,
         candidate_artifacts=candidate_artifacts,
         selected_artifacts=selected_artifacts,
@@ -308,11 +373,21 @@ def _merge_refinement_traces(
 def _write_json_outputs(
     *,
     output_dir: Path,
+    goals: dict[str, GenerationGoal],
+    memory_contexts: dict[str, MemoryContext],
     plans: list[IconPlan],
     baseline_reports: list[ValidationReport],
     refined_reports: list[ValidationReport],
     refinements: list[RefinementResult],
 ) -> None:
+    (output_dir / "generation_goal.json").write_text(
+        json.dumps({key: goal.to_json() for key, goal in goals.items()}, indent=2),
+        encoding="utf-8",
+    )
+    (output_dir / "memory_context.json").write_text(
+        json.dumps({key: context.to_json() for key, context in memory_contexts.items()}, indent=2),
+        encoding="utf-8",
+    )
     (output_dir / "plans.json").write_text(
         json.dumps([plan.to_json() for plan in plans], indent=2),
         encoding="utf-8",
@@ -361,6 +436,10 @@ def _write_trace_outputs(
 
 def _stage_from_message(message: str) -> str:
     lowered = message.lower()
+    if "memory" in lowered:
+        return "memory"
+    if "goal" in lowered:
+        return "goal-manager"
     if "plan" in lowered or "planner" in lowered:
         return "planner"
     if "rewrite" in lowered or "rewritten prompt" in lowered:
@@ -406,3 +485,92 @@ def make_reasoning_config(
         "effort": effort,
         "exclude": True,
     }
+
+
+def _retrieve_memory_contexts(
+    prompts: list[PromptItem],
+    *,
+    memory_tool: MemoryRetrievalTool,
+    enabled: bool,
+    top_k: int,
+    manual_goal: str | None,
+) -> dict[str, MemoryContext]:
+    contexts: dict[str, MemoryContext] = {}
+    for item in prompts:
+        query = " ".join(part for part in (item.prompt, manual_goal or "") if part)
+        if enabled:
+            contexts[item.id] = memory_tool.retrieve(query, top_k=top_k)
+        else:
+            contexts[item.id] = MemoryContext(enabled=False, top_k=0, query=query, records=())
+    return contexts
+
+
+def _curate_memories(
+    *,
+    prompts: list[PromptItem],
+    plans: list[IconPlan],
+    goals: dict[str, GenerationGoal],
+    memory_contexts: dict[str, MemoryContext],
+    traces: list[BackendTrace],
+    metrics: dict[str, object],
+    memory_tool: MemoryRetrievalTool,
+    client: OpenRouterClient,
+    model: str,
+    max_tokens: int | None,
+    reasoning: dict[str, Any] | None,
+    output_dir: Path,
+    logger: ProgressLogger,
+) -> list[dict[str, Any]]:
+    by_prompt = {item.id: item for item in prompts}
+    by_plan = {plan.id: plan for plan in plans}
+    raw_events: list[dict[str, Any]] = []
+    curator = OpenRouterMemoryCuratorAgent(client, max_tokens=max_tokens, reasoning=reasoning)
+    for trace in traces:
+        item = by_prompt.get(trace.id)
+        plan = by_plan.get(trace.id)
+        if item is None or plan is None:
+            continue
+        logger.log(f"{trace.id}: requesting memory curator.")
+        try:
+            result = curator.curate(
+                item,
+                plan,
+                goal=goals.get(trace.id),
+                trace=trace.to_json(),
+                metrics=dict(metrics),
+                memory_context=memory_contexts.get(trace.id),
+            )
+        except OpenRouterError as exc:
+            trace.memory_curator_backend = "openrouter-error"
+            trace.errors.append(f"memory-curator: {exc}")
+            raw_events.append(
+                {
+                    "id": trace.id,
+                    "stage": "memory-curator",
+                    "status": "error",
+                    "model": model,
+                    "error": str(exc),
+                    "debug_payload": exc.debug_payload,
+                }
+            )
+            continue
+        trace.memory_curator_backend = "openrouter"
+        trace.usage["memory_curator"] = result.response.usage
+        record = record_from_curated_json(
+            run_dir=output_dir,
+            prompt=plan.prompt,
+            data=result.record,
+            fallback_score=trace.to_json().get("refined_score"),
+        )
+        memory_tool.append_record(record)
+        raw_events.append(
+            {
+                "id": trace.id,
+                "stage": "memory-curator",
+                "status": "success",
+                "model": model,
+                "response": result.response.raw,
+                "memory_record_id": record.id,
+            }
+        )
+    return raw_events

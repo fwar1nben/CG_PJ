@@ -8,6 +8,7 @@ from typing import Any
 from svg_icon_agent.llm_agents import (
     LlmCritiqueResult,
     OpenRouterConsensusSelectorAgent,
+    OpenRouterGoalManagerAgent,
     OpenRouterMultiCandidateGeneratorAgent,
     OpenRouterPlannerAgent,
     OpenRouterPromptRewriterAgent,
@@ -16,7 +17,8 @@ from svg_icon_agent.llm_agents import (
     OpenRouterSvgOptimizerAgent,
     OpenRouterSvgQualityCriticAgent,
 )
-from svg_icon_agent.models import IconPlan, SvgArtifact, ValidationReport
+from svg_icon_agent.memory import MemoryContext
+from svg_icon_agent.models import GenerationGoal, IconPlan, SvgArtifact, ValidationReport
 from svg_icon_agent.openrouter_client import (
     DEFAULT_OPENROUTER_MODEL,
     OpenRouterClient,
@@ -39,6 +41,11 @@ class BackendTrace:
     validator_backend: str = "not-run"
     refiner_backend: str = "not-run"
     rewriter_backend: str = "not-run"
+    goal_manager_backend: str = "not-run"
+    memory_curator_backend: str = "not-run"
+    memory_enabled: bool = True
+    memory_top_k: int = 3
+    retrieved_memory_ids: list[str] = field(default_factory=list)
     optimizer_backend: str = "not-run"
     optimizer_applied: bool = False
     manual_optimizer_feedback: str | None = None
@@ -73,6 +80,11 @@ class BackendTrace:
             "validator_backend": self.validator_backend,
             "refiner_backend": self.refiner_backend,
             "rewriter_backend": self.rewriter_backend,
+            "goal_manager_backend": self.goal_manager_backend,
+            "memory_curator_backend": self.memory_curator_backend,
+            "memory_enabled": self.memory_enabled,
+            "memory_top_k": self.memory_top_k,
+            "retrieved_memory_ids": self.retrieved_memory_ids,
             "optimizer_backend": self.optimizer_backend,
             "optimizer_applied": self.optimizer_applied,
             "manual_optimizer_feedback": self.manual_optimizer_feedback,
@@ -105,6 +117,7 @@ class BackendTrace:
 
 @dataclass(frozen=True)
 class BackendResult:
+    goals: dict[str, GenerationGoal]
     plans: list[IconPlan]
     artifacts: list[SvgArtifact]
     candidate_artifacts: list[SvgArtifact]
@@ -147,6 +160,10 @@ def generate_with_backend(
     workflow: str = "single",
     candidate_count: int = 3,
     rewrite_prompt: bool = True,
+    manual_goal: str | None = None,
+    memory_contexts: dict[str, MemoryContext] | None = None,
+    memory_enabled: bool = True,
+    memory_top_k: int = 3,
     optimizer_feedback: str | None = None,
     use_llm_optimizer_feedback: bool = True,
     progress: ProgressLogger | None = None,
@@ -191,6 +208,10 @@ def generate_with_backend(
         workflow=workflow,
         candidate_count=candidate_count,
         rewrite_prompt=rewrite_prompt,
+        manual_goal=manual_goal,
+        memory_contexts=memory_contexts or {},
+        memory_enabled=memory_enabled,
+        memory_top_k=memory_top_k,
         optimizer_feedback=optimizer_feedback,
         use_llm_optimizer_feedback=use_llm_optimizer_feedback,
         progress=logger,
@@ -209,10 +230,15 @@ def _openrouter_backend(
     workflow: str,
     candidate_count: int,
     rewrite_prompt: bool,
+    manual_goal: str | None,
+    memory_contexts: dict[str, MemoryContext],
+    memory_enabled: bool,
+    memory_top_k: int,
     optimizer_feedback: str | None,
     use_llm_optimizer_feedback: bool,
     progress: ProgressLogger,
 ) -> BackendResult:
+    goal_manager = OpenRouterGoalManagerAgent(client, max_tokens=max_tokens, reasoning=reasoning)
     prompt_rewriter = OpenRouterPromptRewriterAgent(client, max_tokens=max_tokens, reasoning=reasoning)
     llm_planner = OpenRouterPlannerAgent(client, max_tokens=max_tokens, reasoning=reasoning)
     llm_generator = OpenRouterSvgGeneratorAgent(client, max_tokens=max_tokens, reasoning=reasoning)
@@ -223,6 +249,7 @@ def _openrouter_backend(
     optimizer = OpenRouterSvgOptimizerAgent(client, max_tokens=max_tokens, reasoning=reasoning)
     checker = SvgCheckTool()
 
+    goals: dict[str, GenerationGoal] = {}
     plans: list[IconPlan] = []
     artifacts: list[SvgArtifact] = []
     candidate_artifacts: list[SvgArtifact] = []
@@ -240,17 +267,42 @@ def _openrouter_backend(
             llm_stage=llm_stage,
             workflow=workflow,
             candidate_count=candidate_count if workflow == "collaborative" else 1,
+            memory_enabled=memory_enabled,
+            memory_top_k=memory_top_k,
+            retrieved_memory_ids=memory_contexts.get(item.id).record_ids if memory_contexts.get(item.id) else [],
             original_prompt=item.prompt,
             rewritten_prompt=item.prompt,
             manual_optimizer_feedback=_clean_optional_text(optimizer_feedback),
             use_llm_optimizer_feedback=use_llm_optimizer_feedback,
         )
 
+        memory_context = memory_contexts.get(item.id)
+        progress.log(f"[{index}/{total}] {item.id}: requesting generation goal.")
+        try:
+            goal_result = goal_manager.create_goal(
+                item,
+                manual_goal=manual_goal,
+                memory_context=memory_context,
+            )
+        except OpenRouterError as exc:
+            trace.goal_manager_backend = "openrouter-error"
+            trace.errors.append(f"goal-manager: {exc}")
+            raw_events.append(_raw_event(item.id, "goal-manager", "error", model, error=exc))
+            traces.append(trace)
+            progress.log(f"[{index}/{total}] {item.id}: goal manager failed; no local fallback generated.")
+            continue
+        goal = goal_result.goal
+        goals[item.id] = goal
+        trace.goal_manager_backend = "openrouter"
+        trace.usage["goal_manager"] = goal_result.response.usage
+        raw_events.append(_raw_event(item.id, "goal-manager", "success", model, response=goal_result.response.raw))
+        progress.log(f"[{index}/{total}] {item.id}: generation goal ready.")
+
         active_item = item
         if rewrite_prompt:
             progress.log(f"[{index}/{total}] {item.id}: requesting prompt rewrite.")
             try:
-                rewrite_result = prompt_rewriter.rewrite(item)
+                rewrite_result = prompt_rewriter.rewrite(item, goal=goal, memory_context=memory_context)
             except OpenRouterError as exc:
                 trace.rewriter_backend = "openrouter-error"
                 trace.errors.append(f"rewriter: {exc}")
@@ -270,7 +322,7 @@ def _openrouter_backend(
 
         progress.log(f"[{index}/{total}] {item.id}: requesting LLM plan.")
         try:
-            plan_result = llm_planner.plan(active_item)
+            plan_result = llm_planner.plan(active_item, goal=goal, memory_context=memory_context)
         except OpenRouterError as exc:
             trace.planner_backend = "openrouter-error"
             trace.errors.append(f"planner: {exc}")
@@ -301,6 +353,8 @@ def _openrouter_backend(
                 checker=checker,
                 trace=trace,
                 raw_events=raw_events,
+                goal=goal,
+                memory_context=memory_context,
                 optimizer_feedback=optimizer_feedback,
                 use_llm_optimizer_feedback=use_llm_optimizer_feedback,
                 progress=progress,
@@ -317,7 +371,7 @@ def _openrouter_backend(
         else:
             progress.log(f"[{index}/{total}] {item.id}: requesting LLM SVG draft.")
             try:
-                svg_result = llm_generator.generate(plan)
+                svg_result = llm_generator.generate(plan, goal=goal, memory_context=memory_context)
             except OpenRouterError as exc:
                 trace.svg_backend = "openrouter-error"
                 trace.errors.append(f"svg: {exc}")
@@ -335,6 +389,7 @@ def _openrouter_backend(
         progress.log(f"[{index}/{total}] {item.id}: baseline SVG draft ready.")
 
     return BackendResult(
+        goals=goals,
         plans=plans,
         artifacts=artifacts,
         candidate_artifacts=candidate_artifacts,
@@ -361,6 +416,8 @@ def _collaborative_svg_draft(
     checker: SvgCheckTool,
     trace: BackendTrace,
     raw_events: list[dict[str, Any]],
+    goal: GenerationGoal,
+    memory_context: MemoryContext | None,
     optimizer_feedback: str | None,
     use_llm_optimizer_feedback: bool,
     progress: ProgressLogger,
@@ -374,6 +431,8 @@ def _collaborative_svg_draft(
                 plan,
                 candidate_index=candidate_index,
                 candidate_count=candidate_count,
+                goal=goal,
+                memory_context=memory_context,
             )
         except OpenRouterError as exc:
             trace.errors.append(f"{stage}: {exc}")
@@ -441,6 +500,8 @@ def _collaborative_svg_draft(
             selection,
             manual_feedback=optimizer_feedback,
             use_llm_feedback=use_llm_optimizer_feedback,
+            goal=goal,
+            memory_context=memory_context,
         )
         trace.optimizer_backend = "openrouter"
         trace.optimizer_applied = True

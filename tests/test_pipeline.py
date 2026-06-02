@@ -102,6 +102,8 @@ class BlockingAfterRewriteClient:
     def chat(self, messages, **kwargs):
         self.calls.append({"messages": messages, "kwargs": kwargs})
         if len(self.calls) == 1:
+            return _goal_response()
+        if len(self.calls) == 2:
             self.rewrite_done.set()
             return _rewrite_response(self.rewritten_prompt)
         self.allow_continue.wait(timeout=2.0)
@@ -250,6 +252,7 @@ def _optimizer_response(svg=None):
 def _collaborative_success_responses(item, winner="candidate-2"):
     candidate_ids = ["candidate-1", "candidate-2", "candidate-3"]
     return [
+        _goal_response(),
         _rewrite_response(item.prompt),
         _plan_response(item),
         _svg_response(VALID_SVG),
@@ -526,6 +529,7 @@ class OpenRouterPipelineTests(unittest.TestCase):
         unsafe_svg = '<svg width="256" height="256"><script>alert(1)</script></svg>'
         client = FakeOpenRouterClient(
             [
+                _goal_response(),
                 _plan_response(item),
                 _svg_response(unsafe_svg),
                 _validation_response(
@@ -553,7 +557,7 @@ class OpenRouterPipelineTests(unittest.TestCase):
             model="openai/gpt-oss-120b:free",
         )
 
-        self.assertEqual(len(client.calls), 5)
+        self.assertEqual(len(client.calls), 6)
         self.assertEqual(backend.traces[0].planner_backend, "openrouter")
         self.assertEqual(backend.traces[0].svg_backend, "openrouter")
         self.assertEqual(refinements[0].agent_statuses["validator"], "openrouter")
@@ -739,7 +743,9 @@ class OpenRouterPipelineTests(unittest.TestCase):
 
     def test_openrouter_failure_does_not_fall_back_to_local_svg(self) -> None:
         item = load_prompts(PROMPT_PATH)[0]
-        client = FakeOpenRouterClient([OpenRouterError("rate limited", debug_payload={"body": "try later"})])
+        client = FakeOpenRouterClient(
+            [_goal_response(), OpenRouterError("rate limited", debug_payload={"body": "try later"})]
+        )
 
         backend = generate_with_backend(
             [item],
@@ -754,12 +760,14 @@ class OpenRouterPipelineTests(unittest.TestCase):
         self.assertEqual(backend.traces[0].planner_backend, "openrouter-error")
         self.assertEqual(backend.traces[0].fallback_reason, None)
         self.assertIn("rate limited", backend.traces[0].errors[0])
-        self.assertEqual(backend.raw_llm_events[0]["debug_payload"]["body"], "try later")
+        self.assertEqual(backend.raw_llm_events[1]["debug_payload"]["body"], "try later")
 
     def test_malformed_planner_json_logs_response_excerpt(self) -> None:
         item = load_prompts(PROMPT_PATH)[0]
         malformed = 'The plan is {"category": "ui", "style": "line",}'
-        client = FakeOpenRouterClient([OpenRouterResponse(content=malformed, model="openai/gpt-oss-120b:free")])
+        client = FakeOpenRouterClient(
+            [_goal_response(), OpenRouterResponse(content=malformed, model="openai/gpt-oss-120b:free")]
+        )
 
         backend = generate_with_backend(
             [item],
@@ -771,9 +779,9 @@ class OpenRouterPipelineTests(unittest.TestCase):
         )
 
         self.assertEqual(backend.artifacts, [])
-        self.assertEqual(backend.raw_llm_events[0]["status"], "error")
-        self.assertIn("content_excerpt", backend.raw_llm_events[0]["debug_payload"])
-        self.assertIn("category", backend.raw_llm_events[0]["debug_payload"]["content_excerpt"])
+        self.assertEqual(backend.raw_llm_events[1]["status"], "error")
+        self.assertIn("content_excerpt", backend.raw_llm_events[1]["debug_payload"])
+        self.assertIn("category", backend.raw_llm_events[1]["debug_payload"]["content_excerpt"])
 
 
 class CliTests(unittest.TestCase):
@@ -793,9 +801,11 @@ class CliTests(unittest.TestCase):
         item = make_prompt_from_text(prompt)
         client = FakeOpenRouterClient(
             [
+                _goal_response(),
                 _plan_response(item),
                 _svg_response(VALID_SVG),
                 _validation_response(valid=True, score=100, issues=[]),
+                _memory_curator_response(),
             ]
         )
         with tempfile.TemporaryDirectory() as tmp:
@@ -818,9 +828,11 @@ class CliTests(unittest.TestCase):
         item = make_prompt_from_text(prompt)
         client = FakeOpenRouterClient(
             [
+                _goal_response(),
                 _plan_response(item),
                 _svg_response(VALID_SVG),
                 _validation_response(valid=True, score=100, issues=[]),
+                _memory_curator_response(),
             ]
         )
         with tempfile.TemporaryDirectory() as tmp:
@@ -847,9 +859,11 @@ class WebAppTests(unittest.TestCase):
         item = make_prompt_from_text(prompt, source="web")
         fake_client = FakeOpenRouterClient(
             [
+                _goal_response(),
                 _plan_response(item),
                 _svg_response(VALID_SVG),
                 _validation_response(valid=True, score=100, issues=[]),
+                _memory_curator_response(),
             ]
         )
         with tempfile.TemporaryDirectory() as tmp:
@@ -884,13 +898,76 @@ class WebAppTests(unittest.TestCase):
             self.assertIn("refined_png_url", data["artifacts"])
             self.assertEqual(data["trace"][0]["planner_backend"], "openrouter")
             self.assertEqual(data["trace"][0]["validator_backend"], "openrouter")
-            self.assertEqual([event["stage"] for event in data["raw_events"]], ["planner", "svg", "validator"])
+            self.assertIn(item.id, data["generation_goal"])
+            self.assertIn(item.id, data["memory_context"])
+            self.assertEqual(
+                [event["stage"] for event in data["raw_events"]],
+                ["goal-manager", "planner", "svg", "validator", "memory-curator"],
+            )
             self.assertTrue(any(event["stage"] == "validator" for event in data["events"]))
             self.assertTrue(all(call["kwargs"]["max_tokens"] == 4096 for call in fake_client.calls))
             self.assertTrue(all(call["kwargs"]["reasoning"] == {"max_tokens": 128, "exclude": True} for call in fake_client.calls))
 
+    def test_web_goal_and_memory_are_passed_to_llm_prompts(self) -> None:
+        prompt = "a minimal cloud download icon with a clear arrow"
+        item = make_prompt_from_text(prompt, source="web")
+        fake_client = FakeOpenRouterClient(
+            [
+                _goal_response(),
+                _plan_response(item),
+                _svg_response(VALID_SVG),
+                _validation_response(valid=True, score=100, issues=[]),
+                _memory_curator_response(),
+            ]
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            MemoryRetrievalTool(root / "memory" / "memory_index.jsonl").append_record(
+                MemoryRecord(
+                    id="mem-cloud",
+                    source_path="prior-run",
+                    prompt="cloud download icon",
+                    summary="Use a large central arrow and compact cloud silhouette.",
+                    success_patterns=("large central arrow",),
+                    user_feedback=("make the arrow stronger",),
+                )
+            )
+            app = create_app(
+                output_root=root,
+                client_factory=lambda model, timeout, retries: fake_client,
+                run_async=False,
+            )
+
+            data = app.test_client().post(
+                "/api/runs",
+                json={
+                    "prompt": prompt,
+                    "workflow": "single",
+                    "rewrite_prompt": False,
+                    "goal": "make it suitable for a mobile toolbar",
+                    "memory_enabled": True,
+                    "memory_top_k": 1,
+                },
+            ).get_json()
+
+            self.assertEqual(data["status"], "completed")
+            self.assertEqual(data["memory_top_k"], 1)
+            self.assertTrue(data["memory_enabled"])
+            memory_records = data["memory_context"][item.id]["records"]
+            self.assertEqual(memory_records[0]["id"], "mem-cloud")
+            self.assertIn("mobile-toolbar", data["generation_goal"][item.id]["objective"])
+            goal_prompt = fake_client.calls[0]["messages"][1]["content"]
+            planner_prompt = fake_client.calls[1]["messages"][1]["content"]
+            svg_prompt = fake_client.calls[2]["messages"][1]["content"]
+            self.assertIn("make it suitable for a mobile toolbar", goal_prompt)
+            self.assertIn("large central arrow", goal_prompt)
+            self.assertIn("Generation goal JSON", planner_prompt)
+            self.assertIn("Retrieved memory context", svg_prompt)
+
     def test_web_planner_failure_does_not_generate_local_fallback(self) -> None:
-        fake_client = FakeOpenRouterClient([OpenRouterError("rate limited", debug_payload={"body": "try later"})])
+        fake_client = FakeOpenRouterClient(
+            [_goal_response(), OpenRouterError("rate limited", debug_payload={"body": "try later"})]
+        )
         with tempfile.TemporaryDirectory() as tmp:
             app = create_app(
                 output_root=Path(tmp),
@@ -909,16 +986,18 @@ class WebAppTests(unittest.TestCase):
             self.assertEqual(data["status"], "failed")
             self.assertEqual(data["artifacts"], {})
             self.assertEqual(data["trace"][0]["planner_backend"], "openrouter-error")
-            self.assertEqual(data["raw_events"][0]["debug_payload"]["body"], "try later")
+            self.assertEqual(data["raw_events"][1]["debug_payload"]["body"], "try later")
 
     def test_web_raw_response_does_not_leak_api_key(self) -> None:
         prompt = "a minimal cloud download icon with a clear arrow"
         item = make_prompt_from_text(prompt, source="web")
         fake_client = FakeOpenRouterClient(
             [
+                _goal_response(),
                 _plan_response(item),
                 _svg_response(VALID_SVG),
                 _validation_response(valid=True, score=100, issues=[]),
+                _memory_curator_response(),
             ]
         )
         with tempfile.TemporaryDirectory() as tmp:
@@ -942,7 +1021,7 @@ class WebAppTests(unittest.TestCase):
     def test_web_collaborative_run_returns_candidates_and_selector_trace(self) -> None:
         prompt = "a minimal cloud download icon with a clear arrow"
         item = make_prompt_from_text(prompt, source="web")
-        fake_client = FakeOpenRouterClient(_collaborative_success_responses(item))
+        fake_client = FakeOpenRouterClient(_collaborative_success_responses(item) + [_memory_curator_response()])
         with tempfile.TemporaryDirectory() as tmp:
             app = create_app(
                 output_root=Path(tmp),
@@ -981,7 +1060,7 @@ class WebAppTests(unittest.TestCase):
     def test_web_accepts_optimizer_feedback_options(self) -> None:
         prompt = "a minimal cloud download icon with a clear arrow"
         item = make_prompt_from_text(prompt, source="web")
-        fake_client = FakeOpenRouterClient(_collaborative_success_responses(item))
+        fake_client = FakeOpenRouterClient(_collaborative_success_responses(item) + [_memory_curator_response()])
         with tempfile.TemporaryDirectory() as tmp:
             app = create_app(
                 output_root=Path(tmp),
@@ -1015,6 +1094,7 @@ class WebAppTests(unittest.TestCase):
         fake_client = FakeOpenRouterClient(
             _collaborative_success_responses(item)
             + [
+                _memory_curator_response(),
                 _optimizer_response(post_svg),
                 _validation_response(valid=True, score=98, issues=[]),
             ]

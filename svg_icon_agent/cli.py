@@ -46,6 +46,26 @@ def build_parser() -> argparse.ArgumentParser:
         help="Disable the Prompt Rewriter Agent for ablation.",
     )
     parser.add_argument(
+        "--goal",
+        help="Optional manual generation goal for the Goal Manager Agent.",
+    )
+    parser.add_argument(
+        "--memory-top-k",
+        type=int,
+        default=3,
+        help="Number of local historical memories to retrieve for each prompt.",
+    )
+    parser.add_argument(
+        "--no-memory",
+        action="store_true",
+        help="Disable local historical memory retrieval.",
+    )
+    parser.add_argument(
+        "--rebuild-memory-index",
+        action="store_true",
+        help="Rebuild outputs/memory/memory_index.jsonl from prior outputs before running.",
+    )
+    parser.add_argument(
         "--optimizer-feedback",
         help="Manual improvement feedback for the SVG Optimizer Agent in collaborative workflow.",
     )
@@ -131,6 +151,10 @@ def main(argv: list[str] | None = None) -> int:
         workflow=args.workflow,
         candidate_count=args.candidate_count,
         rewrite_prompt=not args.no_prompt_rewrite,
+        manual_goal=args.goal,
+        memory_enabled=not args.no_memory,
+        memory_top_k=args.memory_top_k,
+        rebuild_memory_index=args.rebuild_memory_index,
         optimizer_feedback=args.optimizer_feedback,
         use_llm_optimizer_feedback=not args.no_llm_optimizer_feedback,
         progress=progress,

@@ -21,7 +21,8 @@ from svg_icon_agent.llm_agents import (
     LlmSelectionResult,
     OpenRouterSvgOptimizerAgent,
 )
-from svg_icon_agent.models import IconPlan, SvgArtifact
+from svg_icon_agent.memory import MemoryContext, MemoryRecord, RetrievedMemory
+from svg_icon_agent.models import GenerationGoal, IconPlan, SvgArtifact
 from svg_icon_agent.openrouter_client import DEFAULT_OPENROUTER_MODEL, OpenRouterClient
 from svg_icon_agent.openrouter_client import OpenRouterError, OpenRouterResponse
 from svg_icon_agent.pipeline import EventProgressLogger, make_reasoning_config, run_single_prompt_pipeline
@@ -49,6 +50,9 @@ class WebRun:
     workflow: str
     candidate_count: int
     rewrite_prompt: bool
+    manual_goal: str | None
+    memory_enabled: bool
+    memory_top_k: int
     optimizer_feedback: str | None
     use_llm_optimizer_feedback: bool
     status: str = "queued"
@@ -95,6 +99,9 @@ def create_app(
         workflow = _workflow_value(payload.get("workflow"))
         candidate_count = _int_value(payload.get("candidate_count"), 3, minimum=1, maximum=6)
         rewrite_prompt = bool(payload.get("rewrite_prompt", True))
+        manual_goal = _optional_text_value(payload.get("goal"))
+        memory_enabled = bool(payload.get("memory_enabled", True))
+        memory_top_k = _int_value(payload.get("memory_top_k"), 3, minimum=0, maximum=10)
         optimizer_feedback = _optional_text_value(payload.get("optimizer_feedback"))
         use_llm_optimizer_feedback = bool(payload.get("use_llm_optimizer_feedback", True))
         run_id = f"{int(time.time())}-{uuid.uuid4().hex[:8]}"
@@ -113,6 +120,9 @@ def create_app(
             workflow=workflow,
             candidate_count=candidate_count,
             rewrite_prompt=rewrite_prompt,
+            manual_goal=manual_goal,
+            memory_enabled=memory_enabled,
+            memory_top_k=memory_top_k,
             optimizer_feedback=optimizer_feedback,
             use_llm_optimizer_feedback=use_llm_optimizer_feedback,
         )
@@ -157,6 +167,9 @@ def create_app(
                 workflow="collaborative",
                 candidate_count=3,
                 rewrite_prompt=True,
+                manual_goal=None,
+                memory_enabled=True,
+                memory_top_k=3,
                 optimizer_feedback=None,
                 use_llm_optimizer_feedback=True,
             )
@@ -238,6 +251,11 @@ def _execute_run(run: WebRun, client_factory: ClientFactory | None) -> None:
             workflow=run.workflow,
             candidate_count=run.candidate_count,
             rewrite_prompt=run.rewrite_prompt,
+            manual_goal=run.manual_goal,
+            memory_enabled=run.memory_enabled,
+            memory_top_k=run.memory_top_k,
+            memory_index_path=_memory_root_for_run(run) / "memory" / "memory_index.jsonl",
+            memory_outputs_root=_memory_root_for_run(run),
             optimizer_feedback=run.optimizer_feedback,
             use_llm_optimizer_feedback=run.use_llm_optimizer_feedback,
             client=client,
@@ -298,6 +316,8 @@ def _post_run_optimize(
     logger: EventProgressLogger,
 ) -> None:
     plan = _load_run_plan(run.output_dir)
+    goal = _load_run_goal(run.output_dir, plan.id)
+    memory_context = _load_run_memory_context(run.output_dir, plan.id)
     source_artifact = _load_post_run_source_artifact(run.output_dir, plan.id)
     source_backup_dir = run.output_dir / "post_run_sources"
     source_backup_dir.mkdir(parents=True, exist_ok=True)
@@ -323,6 +343,8 @@ def _post_run_optimize(
             selection,
             manual_feedback=feedback,
             use_llm_feedback=use_llm_feedback,
+            goal=goal,
+            memory_context=memory_context,
         )
     except OpenRouterError as exc:
         raw_events.append(
@@ -437,6 +459,13 @@ def _make_web_client(run: WebRun, client_factory: ClientFactory | None) -> OpenR
     )
 
 
+def _memory_root_for_run(run: WebRun) -> Path:
+    output_root = run.output_dir.parent
+    if output_root.name == "web":
+        return output_root.parent
+    return output_root
+
+
 def _run_payload(run: WebRun, *, include_files: bool = True) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "id": run.id,
@@ -449,6 +478,9 @@ def _run_payload(run: WebRun, *, include_files: bool = True) -> dict[str, Any]:
         "workflow": run.workflow,
         "candidate_count": run.candidate_count,
         "rewrite_prompt": run.rewrite_prompt,
+        "goal": run.manual_goal,
+        "memory_enabled": run.memory_enabled,
+        "memory_top_k": run.memory_top_k,
         "optimizer_feedback": run.optimizer_feedback,
         "use_llm_optimizer_feedback": run.use_llm_optimizer_feedback,
         "status": run.status,
@@ -457,6 +489,8 @@ def _run_payload(run: WebRun, *, include_files: bool = True) -> dict[str, Any]:
         "updated_at": run.updated_at,
         "events": list(run.events),
         "prompt_rewrite": _prompt_rewrite_payload(run),
+        "generation_goal": _read_json(run.output_dir / "generation_goal.json"),
+        "memory_context": _read_json(run.output_dir / "memory_context.json"),
         "summary": _read_json(run.output_dir / "metrics.json") or run.summary,
         "trace": _read_json(run.output_dir / "llm_trace.json"),
         "baseline_validation": _read_json(run.output_dir / "baseline_validation.json"),
@@ -546,6 +580,58 @@ def _load_run_plan(output_dir: Path) -> IconPlan:
         motifs=tuple(str(value) for value in item.get("motifs") or ()),
         layout=str(item.get("layout") or "post-run"),
         constraints=tuple(str(value) for value in item.get("constraints") or ()),
+    )
+
+
+def _load_run_goal(output_dir: Path, artifact_id: str) -> GenerationGoal | None:
+    data = _read_json(output_dir / "generation_goal.json")
+    if not isinstance(data, dict):
+        return None
+    value = data.get(artifact_id)
+    if not isinstance(value, dict):
+        return None
+    return GenerationGoal(
+        objective=str(value.get("objective") or ""),
+        visual_requirements=_text_tuple(value.get("visual_requirements")),
+        constraints=_text_tuple(value.get("constraints")),
+        acceptance_criteria=_text_tuple(value.get("acceptance_criteria")),
+        style_preferences=_text_tuple(value.get("style_preferences")),
+        avoid_patterns=_text_tuple(value.get("avoid_patterns")),
+    )
+
+
+def _load_run_memory_context(output_dir: Path, artifact_id: str) -> MemoryContext | None:
+    data = _read_json(output_dir / "memory_context.json")
+    if not isinstance(data, dict):
+        return None
+    value = data.get(artifact_id)
+    if not isinstance(value, dict):
+        return None
+    records = []
+    for item in value.get("records") or ():
+        if not isinstance(item, dict):
+            continue
+        records.append(
+            RetrievedMemory(
+                record=MemoryRecord(
+                    id=str(item.get("id") or ""),
+                    source_path=str(item.get("source_path") or ""),
+                    prompt=str(item.get("prompt") or ""),
+                    summary=str(item.get("summary") or ""),
+                    success_patterns=_text_tuple(item.get("success_patterns")),
+                    failure_patterns=_text_tuple(item.get("failure_patterns")),
+                    user_feedback=_text_tuple(item.get("user_feedback")),
+                    score=_optional_int_value(item.get("score"), minimum=0, maximum=100),
+                    tags=_text_tuple(item.get("tags")),
+                ),
+                score=float(item.get("retrieval_score") or 0),
+            )
+        )
+    return MemoryContext(
+        enabled=bool(value.get("enabled", True)),
+        top_k=_int_value(value.get("top_k"), 3, minimum=0, maximum=10),
+        query=str(value.get("query") or ""),
+        records=tuple(records),
     )
 
 
@@ -917,6 +1003,19 @@ _INDEX_HTML = """<!doctype html>
       font-size: 13px;
       line-height: 1.4;
     }
+    .memory-list {
+      display: grid;
+      gap: 8px;
+      font-size: 13px;
+      line-height: 1.4;
+      color: var(--muted);
+    }
+    .memory-item {
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 8px;
+      background: #fbfdff;
+    }
     .pill {
       display: inline-flex;
       align-items: center;
@@ -1094,6 +1193,10 @@ _INDEX_HTML = """<!doctype html>
         <textarea id="prompt">a minimal rocket launch icon with a dynamic flame</textarea>
       </div>
       <div>
+        <label for="goal">Goal</label>
+        <textarea id="goal" style="min-height: 76px" placeholder="Optional generation goal, e.g. suitable for a mobile toolbar"></textarea>
+      </div>
+      <div>
         <label for="model">Model</label>
         <input id="model" value="__MODEL__">
       </div>
@@ -1114,6 +1217,14 @@ _INDEX_HTML = """<!doctype html>
         <input id="rewritePrompt" type="checkbox" checked>
         Prompt Rewriter Agent
       </label>
+      <label>
+        <input id="useMemory" type="checkbox" checked>
+        Use historical memory
+      </label>
+      <div>
+        <label for="memoryTopK">Memory top-k</label>
+        <input id="memoryTopK" type="number" min="0" max="10" value="3">
+      </div>
       <label>
         <input id="useLlmOptimizerFeedback" type="checkbox" checked>
         Use LLM feedback
@@ -1173,7 +1284,7 @@ _INDEX_HTML = """<!doctype html>
         <div id="optimizerSummary" class="optimizer-summary">Waiting for SVG Optimizer Agent context</div>
       </section>
       <section class="prompt-panel">
-        <h2>Prompt Rewrite</h2>
+        <h2>Goal, Memory, Prompt Rewrite</h2>
         <div class="prompt-compare">
           <div>
             <label>Original</label>
@@ -1182,6 +1293,16 @@ _INDEX_HTML = """<!doctype html>
           <div>
             <label>Rewritten</label>
             <div id="rewrittenPrompt" class="prompt-box">Waiting for Prompt Rewriter Agent</div>
+          </div>
+        </div>
+        <div class="prompt-compare">
+          <div>
+            <label>Generation Goal</label>
+            <div id="goalOutput" class="prompt-box">Waiting for Goal Manager Agent</div>
+          </div>
+          <div>
+            <label>Retrieved Memories</label>
+            <div id="memoryOutput" class="prompt-box">Waiting for MemoryRetrievalTool</div>
           </div>
         </div>
       </section>
@@ -1239,11 +1360,14 @@ _INDEX_HTML = """<!doctype html>
     runButton.addEventListener('click', async () => {
       const payload = {
         prompt: document.getElementById('prompt').value,
+        goal: document.getElementById('goal').value,
         model: document.getElementById('model').value,
         max_refine_rounds: Number(document.getElementById('rounds').value),
         workflow: document.getElementById('workflow').value,
         candidate_count: Number(document.getElementById('candidateCount').value),
         rewrite_prompt: document.getElementById('rewritePrompt').checked,
+        memory_enabled: document.getElementById('useMemory').checked,
+        memory_top_k: Number(document.getElementById('memoryTopK').value),
         request_timeout: Number(document.getElementById('timeout').value),
         empty_response_retries: Number(document.getElementById('emptyRetries').value),
         max_tokens: Number(document.getElementById('maxTokens').value) || null,
@@ -1325,6 +1449,7 @@ _INDEX_HTML = """<!doctype html>
       renderJson('trace', data.trace || data.summary || {});
       renderJson('raw', data.raw_events || []);
       renderPromptRewrite(data);
+      renderGoalAndMemory(data);
       renderOptimizerContext(data);
       renderArtifacts(data.artifacts || {});
       renderCandidates((data.artifacts || {}).candidates || [], data.trace || []);
@@ -1389,6 +1514,29 @@ _INDEX_HTML = """<!doctype html>
         liveRewrite.original_prompt || traceItem.original_prompt || data.prompt || 'Waiting for input';
       document.getElementById('rewrittenPrompt').textContent =
         liveRewrite.rewritten_prompt || traceItem.rewritten_prompt || 'Waiting for Prompt Rewriter Agent';
+    }
+
+    function renderGoalAndMemory(data) {
+      const traceItem = data.trace && data.trace[0] ? data.trace[0] : {};
+      const artifactId = data.artifacts && data.artifacts.id ? data.artifacts.id : traceItem.id;
+      const goals = data.generation_goal || {};
+      const goal = artifactId && goals[artifactId] ? goals[artifactId] : null;
+      document.getElementById('goalOutput').textContent = goal
+        ? `${goal.objective || ''}\nRequirements: ${(goal.visual_requirements || []).join(', ')}\nAccept: ${(goal.acceptance_criteria || []).join(', ')}\nAvoid: ${(goal.avoid_patterns || []).join(', ')}`
+        : 'Waiting for Goal Manager Agent';
+      const contexts = data.memory_context || {};
+      const context = artifactId && contexts[artifactId] ? contexts[artifactId] : null;
+      if (!context || !Array.isArray(context.records) || !context.records.length) {
+        document.getElementById('memoryOutput').innerHTML = '<div>No retrieved memories</div>';
+        return;
+      }
+      document.getElementById('memoryOutput').innerHTML = `<div class="memory-list">${context.records.map((record) => `
+        <div class="memory-item">
+          <strong>${escapeHtml(record.id || 'memory')}</strong> score ${escapeHtml(record.retrieval_score || 0)}<br>
+          ${escapeHtml(record.summary || record.prompt || '')}<br>
+          Feedback: ${escapeHtml((record.user_feedback || []).join('; ') || 'none')}
+        </div>
+      `).join('')}</div>`;
     }
 
     function renderOptimizerContext(data) {
