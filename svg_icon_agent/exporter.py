@@ -237,7 +237,7 @@ def _gallery_html(
 <body>
   <main>
     <h1>SVG Icon Agent Gallery</h1>
-    <p class="summary">Baseline and refined outputs from the deterministic multi-agent SVG pipeline.</p>
+    <p class="summary">Baseline and refined outputs from the collaborative LLM SVG pipeline.</p>
     <section class="grid">
 {''.join(cards)}
     </section>
