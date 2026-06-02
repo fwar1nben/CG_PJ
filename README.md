@@ -4,11 +4,12 @@ SVG Icon Agent is a lightweight text-to-SVG project for Computer Graphics Projec
 It turns short English icon prompts into editable SVG icons through a fully
 LLM-backed multi-agent pipeline: OpenRouter planning, multi-candidate SVG
 drafting, semantic and SVG-quality critique, consensus selection, validation,
-refinement, and gallery export. A Prompt Rewriter Agent first optimizes the
-input description for SVG icon generation, and an SVG Optimizer Agent improves
-the selected draft from team feedback before validation. Local code is limited
-to prompt loading, machine-checkable SVG safety checks, rendering, and reporting
-tools.
+refinement, and gallery export. A Goal Manager Agent first turns the prompt,
+optional user goal, and retrieved historical memories into explicit generation
+criteria. A Prompt Rewriter Agent then optimizes the input description, and an
+SVG Optimizer Agent improves the selected draft from team feedback before
+validation. Local code is limited to prompt loading, historical memory retrieval,
+machine-checkable SVG safety checks, rendering, and reporting tools.
 
 ## Quick start
 
@@ -36,6 +37,8 @@ export OPENROUTER_MODEL="openai/gpt-oss-120b:free"
   --reasoning-effort none \
   --workflow collaborative \
   --candidate-count 3 \
+  --goal "make it suitable for a mobile toolbar" \
+  --memory-top-k 3 \
   --optimizer-feedback "simplify the silhouette and increase negative space"
 ```
 
@@ -49,10 +52,11 @@ Manual input is also supported:
 ```
 
 OpenRouter free models can be slow or queued. The pipeline makes model calls for
-planning, candidate SVG drafting, LLM critique, consensus selection, SVG
-optimization, validation, and LLM refinement when repairs are needed. The default
-workflow also rewrites the prompt before planning; the Web UI shows the rewritten
-prompt as soon as the Prompt Rewriter Agent finishes.
+goal management, prompt rewriting, planning, candidate SVG drafting, LLM critique,
+consensus selection, SVG optimization, validation, memory curation, and LLM
+refinement when repairs are needed. The default workflow retrieves similar local
+run memories and shows the generated goal, retrieved memories, and rewritten
+prompt in the Web UI.
 After a Web run completes, enter new advice in `Optimizer feedback` and click
 `Apply feedback` to run a post-run Optimizer pass on the latest SVG, followed by
 the existing Validator/Refiner/export steps.
@@ -70,32 +74,41 @@ Useful output files:
 - `outputs/png/baseline/*.png` and `outputs/png/refined/*.png`: raster previews.
 - `outputs/gallery.html`: side-by-side visual comparison for the report and slides.
 - `outputs/metrics.json`: aggregate validity and score improvements.
+- `outputs/generation_goal.json`: structured goals from the Goal Manager Agent.
+- `outputs/memory_context.json`: retrieved historical memories used by the run.
+- `outputs/memory/memory_index.jsonl`: local reusable memory records.
 - `outputs/refinement_history.json`: per-icon repair logs.
 - `outputs/llm_trace.json`: model usage, stage status, errors, and score trace.
 - `outputs/llm_raw_responses.jsonl`: sanitized raw OpenRouter responses and error payloads.
 
 ## Pipeline
 
-1. Prompt Rewriter Agent rewrites the user prompt into a concise SVG-icon prompt.
+1. MemoryRetrievalTool retrieves similar local historical runs from
+   `outputs/memory/memory_index.jsonl`. It is a tool, not an Agent.
+2. Goal Manager Agent creates structured generation goals and acceptance criteria.
    This Agent calls OpenRouter.
-2. Planner Agent extracts icon intent, palette, category, objects, and constraints.
+3. Prompt Rewriter Agent rewrites the user prompt into a concise SVG-icon prompt.
    This Agent calls OpenRouter.
-3. Multi-Candidate Generator Agent creates several different SVG drafts.
+4. Planner Agent extracts icon intent, palette, category, objects, and constraints.
    This Agent calls OpenRouter.
-4. Semantic Critic Agent judges prompt alignment and small-icon readability.
+5. Multi-Candidate Generator Agent creates several different SVG drafts.
    This Agent calls OpenRouter.
-5. SVG Quality Critic Agent judges editability, safety, and rendering risk using
+6. Semantic Critic Agent judges prompt alignment and small-icon readability.
+   This Agent calls OpenRouter.
+7. SVG Quality Critic Agent judges editability, safety, and rendering risk using
    local `SvgCheckTool` findings as evidence. This Agent calls OpenRouter.
-6. Consensus Selector Agent chooses the strongest candidate and writes a repair
+8. Consensus Selector Agent chooses the strongest candidate and writes a repair
    brief for the next Agent. This Agent calls OpenRouter.
-7. SVG Optimizer Agent rewrites the selected SVG using Critic, Selector,
+9. SVG Optimizer Agent rewrites the selected SVG using Critic, Selector,
    `SvgCheckTool`, and optional manual feedback. This Agent calls OpenRouter.
-8. Validator Agent judges semantic alignment, visual quality, editability, and
+10. Validator Agent judges semantic alignment, visual quality, editability, and
    rule compliance. This Agent calls OpenRouter and receives local `SvgCheckTool`
    findings as evidence.
-9. Refiner Agent repairs validation issues by returning a complete revised SVG.
+11. Refiner Agent repairs validation issues by returning a complete revised SVG.
    This Agent calls OpenRouter.
-10. Local tools render PNG previews, metrics, trace logs, and the gallery.
+12. Memory Curator Agent summarizes successful/failed lessons into the local
+   memory index. This Agent calls OpenRouter.
+13. Local tools render PNG previews, metrics, trace logs, and the gallery.
 
 ## Current experiment
 
@@ -109,7 +122,8 @@ demos.
 
 This project avoids training large image models. Its graphics component is editable
 SVG generation, while its agent component is a decomposed OpenRouter planning,
-candidate generation, critique, selection, validation, and self-repair loop.
+goal management, retrieval-augmented prompt conditioning, candidate generation,
+critique, selection, validation, memory curation, and self-repair loop.
 Deterministic local code is only used as a toolchain for syntax/safety checks,
 rendering, and report export.
 
@@ -125,6 +139,10 @@ rendering, and report export.
 - `--workflow`: `collaborative` by default; use `single` for ablation.
 - `--candidate-count`: number of SVG candidates in collaborative mode, default 3.
 - `--no-prompt-rewrite`: disable Prompt Rewriter Agent for ablation.
+- `--goal`: optional manual generation goal for Goal Manager Agent.
+- `--memory-top-k`: number of local historical memories to retrieve, default 3.
+- `--no-memory`: disable local historical memory retrieval.
+- `--rebuild-memory-index`: rebuild `outputs/memory/memory_index.jsonl` from prior outputs.
 - `--optimizer-feedback`: manual improvement advice for the SVG Optimizer Agent.
 - `--no-llm-optimizer-feedback`: optimizer uses only manual feedback and
   `SvgCheckTool` context, without Critic/Selector advice.

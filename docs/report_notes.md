@@ -6,12 +6,14 @@ SVG Icon Agent: A Collaborative LLM-Agent Pipeline for Editable SVG Icon Generat
 
 ## Abstract draft
 
-This project presents SVG Icon Agent, a lightweight collaborative multi-agent pipeline that converts short English icon prompts into editable SVG icons. Instead of relying on heavy diffusion or video models, every named Agent calls OpenRouter's `openai/gpt-oss-120b:free` model. The default workflow rewrites the user prompt for SVG-icon generation, plans the icon, generates multiple SVG candidates, asks separate semantic and SVG-quality Critic Agents to review them, uses a Consensus Selector Agent to choose the strongest draft, asks an SVG Optimizer Agent to improve the selected draft from team feedback, and then validates and refines the optimized SVG. Deterministic local code is restricted to prompt loading, machine-checkable SVG safety checks, PNG rendering, and report export. The pipeline produces candidate, selected, baseline, and refined SVG files, PNG previews, a gallery page, LLM trace logs, raw response logs, and quantitative metrics.
+This project presents SVG Icon Agent, a lightweight collaborative multi-agent pipeline that converts short English icon prompts into editable SVG icons. Instead of relying on heavy diffusion or video models, every named Agent calls OpenRouter's `openai/gpt-oss-120b:free` model. The default workflow retrieves similar historical runs, creates a structured generation goal, rewrites the user prompt for SVG-icon generation, plans the icon, generates multiple SVG candidates, asks separate semantic and SVG-quality Critic Agents to review them, uses a Consensus Selector Agent to choose the strongest draft, asks an SVG Optimizer Agent to improve the selected draft from team feedback, validates and refines the optimized SVG, and finally curates a reusable memory for future runs. Deterministic local code is restricted to prompt loading, memory retrieval, machine-checkable SVG safety checks, PNG rendering, and report export. The pipeline produces goal, memory, candidate, selected, baseline, and refined SVG files, PNG previews, a gallery page, LLM trace logs, raw response logs, and quantitative metrics.
 
 Code link: TODO
 
 ## Method section outline
 
+- Local MemoryRetrievalTool: retrieves similar historical runs from local memory records. It is a tool, not an Agent.
+- OpenRouter Goal Manager Agent: converts the user prompt, optional manual goal, and retrieved memories into objective, visual requirements, constraints, acceptance criteria, preferences, and avoid patterns.
 - OpenRouter Prompt Rewriter Agent: rewrites the raw user prompt into a concise SVG-icon prompt while preserving explicit user intent.
 - OpenRouter Planner Agent: asks `openai/gpt-oss-120b:free` for structured icon-plan JSON compatible with the local `IconPlan` data model.
 - OpenRouter Multi-Candidate Generator Agent: asks the model for 3 distinct constrained SVG drafts using only safe primitives.
@@ -22,6 +24,7 @@ Code link: TODO
 - Post-run manual optimization: after the first pipeline finishes in the Web UI, the user can add new improvement advice and trigger another SVG Optimizer pass on the latest generated SVG, followed by Validator/Refiner/export.
 - OpenRouter Validator Agent: asks the model to judge semantic alignment, visual quality, editability, and rule compliance, using local `SvgCheckTool` output as evidence.
 - OpenRouter Refiner Agent: asks the model to return a complete repaired SVG based on validator and tool feedback.
+- OpenRouter Memory Curator Agent: summarizes each completed run into reusable local memory containing successful strategies, failure patterns, user feedback, score, and tags.
 - Local SvgCheckTool: checks parseability, canvas size, `viewBox`, unsafe tags, external references, accessible metadata, primitive count, and palette usage. It is a tool, not an Agent.
 - Gallery Exporter: creates PNG previews, metrics, `llm_trace.json`, and a side-by-side HTML gallery for presentation.
 
@@ -34,7 +37,7 @@ Code link: TODO
 - Baseline: SVG Optimizer output after applying LLM team feedback and optional manual advice.
 - Refined: SVG after up to 3 OpenRouter Refiner Agent rounds.
 - Ablation baseline: `--workflow single`, which skips candidate competition and critic/selector collaboration.
-- Metrics: prompt rewrite trace, optimizer feedback sources, LLM validation rate, average validation score, average score delta, max repair rounds, candidate scores, selected candidate, critic scores, stage status, errors, and OpenRouter usage.
+- Metrics: generated goal, retrieved memory ids, prompt rewrite trace, optimizer feedback sources, LLM validation rate, average validation score, average score delta, max repair rounds, candidate scores, selected candidate, critic scores, stage status, errors, and OpenRouter usage.
 
 ## Current result snapshot
 
@@ -53,6 +56,9 @@ Code link: TODO
 
 - Uses an LLM-assisted agentic workflow for vector graphics, not raster image generation.
 - Keeps every named Agent model-backed, while local checks act only as deterministic tools.
+- Adds retrieval-augmented generation over local historical runs without using local SVG templates or local model fallback.
+- Adds a Goal Manager Agent that makes generation objectives and acceptance criteria explicit before planning.
+- Adds a Memory Curator Agent that converts completed runs into reusable future context.
 - Adds a Prompt Rewriter Agent before planning, making raw user input optimization visible and ablatable.
 - Adds multi-candidate generation with independent semantic and SVG-quality Critic Agents.
 - Uses a Consensus Selector Agent to make the final baseline choice explainable.
@@ -66,9 +72,9 @@ Code link: TODO
 ## Suggested presentation flow
 
 1. Problem: text-to-image models are overpowered for simple editable icons and are hard to control.
-2. Idea: convert icon generation into LLM prompt rewriting, planning, candidate drafting, independent critique, consensus selection, validation, and repair.
-3. System diagram: raw prompt to rewritten prompt to OpenRouter plan to 3 candidates to semantic/SVG-quality critics to selector to optimizer to refined SVG.
-4. Demo: use the Web UI to show original vs rewritten prompt, candidate drafts, selected winner, optimized baseline, manual optimizer feedback, post-run feedback optimization, trace, raw LLM responses, and final PNG.
+2. Idea: convert icon generation into memory retrieval, LLM goal management, prompt rewriting, planning, candidate drafting, independent critique, consensus selection, validation, repair, and memory curation.
+3. System diagram: raw prompt to retrieved memories to generation goal to rewritten prompt to OpenRouter plan to 3 candidates to semantic/SVG-quality critics to selector to optimizer to refined SVG to curated memory.
+4. Demo: use the Web UI to show original vs rewritten prompt, generated goal, retrieved memories, candidate drafts, selected winner, optimized baseline, manual optimizer feedback, post-run feedback optimization, trace, raw LLM responses, and final PNG.
 5. Results: compare collaborative mode with `--workflow single`, showing validity, score improvements, selected candidates, and repair examples.
 6. Limitations: free API may be rate-limited; renderer supports a practical SVG subset.
 7. Future work: richer layout grammar, human preference evaluation, and more LLM-based repair strategies.
