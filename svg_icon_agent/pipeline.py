@@ -23,6 +23,7 @@ class EventProgressLogger(ProgressLogger):
     """Progress logger that stores events for the Web UI."""
 
     events: list[dict[str, Any]] = field(default_factory=list)
+    prompt_rewrites: dict[str, dict[str, str]] = field(default_factory=dict)
 
     def log(self, message: str) -> None:
         elapsed = self.elapsed_seconds()
@@ -40,6 +41,12 @@ class EventProgressLogger(ProgressLogger):
         import time
 
         return time.monotonic() - self.started_at
+
+    def record_prompt_rewrite(self, prompt_id: str, original_prompt: str, rewritten_prompt: str) -> None:
+        self.prompt_rewrites[prompt_id] = {
+            "original_prompt": original_prompt,
+            "rewritten_prompt": rewritten_prompt,
+        }
 
 
 @dataclass(frozen=True)

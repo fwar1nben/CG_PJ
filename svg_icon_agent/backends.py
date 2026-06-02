@@ -240,6 +240,7 @@ def _openrouter_backend(
             trace.rewriter_backend = "openrouter"
             trace.rewritten_prompt = rewrite_result.rewritten_prompt
             trace.usage["prompt_rewriter"] = rewrite_result.response.usage
+            progress.record_prompt_rewrite(item.id, item.prompt, rewrite_result.rewritten_prompt)
             raw_events.append(_raw_event(item.id, "prompt-rewriter", "success", model, response=rewrite_result.response.raw))
             progress.log(f"[{index}/{total}] {item.id}: rewritten prompt ready.")
         else:

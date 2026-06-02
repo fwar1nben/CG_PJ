@@ -17,6 +17,8 @@ class ProgressLogger:
         elapsed = time.monotonic() - self.started_at
         print(f"[{elapsed:6.1f}s] {message}", flush=True)
 
+    def record_prompt_rewrite(self, prompt_id: str, original_prompt: str, rewritten_prompt: str) -> None:
+        return
+
 
 QUIET_PROGRESS = ProgressLogger(verbose=False)
-

@@ -42,6 +42,7 @@ class WebRun:
     created_at: float = field(default_factory=time.time)
     updated_at: float = field(default_factory=time.time)
     events: list[dict[str, Any]] = field(default_factory=list)
+    prompt_rewrites: dict[str, dict[str, str]] = field(default_factory=dict)
     raw_events: list[dict[str, Any]] = field(default_factory=list)
     summary: dict[str, Any] = field(default_factory=dict)
 
@@ -157,7 +158,7 @@ def create_app(
 def _execute_run(run: WebRun, client_factory: ClientFactory | None) -> None:
     run.status = "running"
     run.updated_at = time.time()
-    logger = EventProgressLogger(verbose=False, events=run.events)
+    logger = EventProgressLogger(verbose=False, events=run.events, prompt_rewrites=run.prompt_rewrites)
     prompt_item = make_prompt_from_text(run.prompt, source="web")
     try:
         client = client_factory(run.model, run.request_timeout, run.max_retries) if client_factory else None
@@ -207,6 +208,7 @@ def _run_payload(run: WebRun, *, include_files: bool = True) -> dict[str, Any]:
         "created_at": run.created_at,
         "updated_at": run.updated_at,
         "events": list(run.events),
+        "prompt_rewrite": _prompt_rewrite_payload(run),
         "summary": _read_json(run.output_dir / "metrics.json") or run.summary,
         "trace": _read_json(run.output_dir / "llm_trace.json"),
         "baseline_validation": _read_json(run.output_dir / "baseline_validation.json"),
@@ -216,6 +218,25 @@ def _run_payload(run: WebRun, *, include_files: bool = True) -> dict[str, Any]:
     if include_files:
         payload["artifacts"] = _artifact_payload(run)
     return payload
+
+
+def _prompt_rewrite_payload(run: WebRun) -> dict[str, str] | None:
+    if run.prompt_rewrites:
+        return next(iter(run.prompt_rewrites.values()))
+    trace = _read_json(run.output_dir / "llm_trace.json")
+    if isinstance(trace, list) and trace:
+        first = trace[0]
+        if isinstance(first, dict):
+            original = first.get("original_prompt")
+            rewritten = first.get("rewritten_prompt")
+            if isinstance(original, str) or isinstance(rewritten, str):
+                return {
+                    "original_prompt": original if isinstance(original, str) else "",
+                    "rewritten_prompt": rewritten if isinstance(rewritten, str) else "",
+                }
+    if run.prompt:
+        return {"original_prompt": run.prompt, "rewritten_prompt": ""}
+    return None
 
 
 def _artifact_payload(run: WebRun) -> dict[str, Any]:
@@ -860,8 +881,11 @@ _INDEX_HTML = """<!doctype html>
 
     function renderPromptRewrite(data) {
       const traceItem = data.trace && data.trace[0] ? data.trace[0] : {};
-      document.getElementById('originalPrompt').textContent = traceItem.original_prompt || data.prompt || 'Waiting for input';
-      document.getElementById('rewrittenPrompt').textContent = traceItem.rewritten_prompt || 'Waiting for Prompt Rewriter Agent';
+      const liveRewrite = data.prompt_rewrite || {};
+      document.getElementById('originalPrompt').textContent =
+        liveRewrite.original_prompt || traceItem.original_prompt || data.prompt || 'Waiting for input';
+      document.getElementById('rewrittenPrompt').textContent =
+        liveRewrite.rewritten_prompt || traceItem.rewritten_prompt || 'Waiting for Prompt Rewriter Agent';
     }
 
     function renderCandidates(candidates, trace) {

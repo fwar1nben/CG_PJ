@@ -48,7 +48,8 @@ Manual input is also supported:
 OpenRouter free models can be slow or queued. The pipeline makes model calls for
 planning, candidate SVG drafting, LLM critique, consensus selection, validation,
 and LLM refinement when repairs are needed. The default workflow also rewrites
-the prompt before planning.
+the prompt before planning; the Web UI shows the rewritten prompt as soon as the
+Prompt Rewriter Agent finishes.
 The command prints realtime progress for each stage. If a model call fails, the
 error is logged; the system does not synthesize a local SVG fallback.
 

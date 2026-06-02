@@ -487,17 +487,20 @@ class OpenRouterRefinerAgent:
 
 
 def _rewrite_prompt(item: PromptItem) -> str:
-    return f"""Rewrite this icon request for a text-to-SVG icon agent.
+    return f"""Rewrite and enrich this icon request for a text-to-SVG icon agent.
 Return one JSON object with this exact shape:
 {{
-  "rewritten_prompt": "one concise English prompt, 12 to 32 words"
+  "rewritten_prompt": "one polished English prompt, 35 to 60 words"
 }}
 
 Rules:
 - Preserve the user's original intent and any explicitly requested subject, action, style, or color words.
-- Make the request concrete for a 256x256 editable SVG icon.
-- Mention the main object, important supporting motifs, and composition if useful.
-- Do not add exact color names or color hex values unless the original prompt explicitly included them.
+- Expand vague input into a concrete 256x256 editable SVG icon brief.
+- Add useful visual details: main subject, secondary motifs, silhouette, composition, visual hierarchy, and small-size readability.
+- Mention simple geometric shapes or icon-friendly parts when helpful, without writing SVG code.
+- Make the rewritten prompt noticeably richer than the original; do not merely paraphrase it.
+- Do not add exact color names, color adjectives, or color hex values unless the original prompt explicitly included them.
+- Do not contradict the category or style hints.
 - Do not include SVG code, markdown, explanations, or multiple alternatives.
 
 Original prompt:

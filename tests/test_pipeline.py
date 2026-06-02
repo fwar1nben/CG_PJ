@@ -5,6 +5,8 @@ from __future__ import annotations
 import inspect
 import json
 import os
+import threading
+import time
 import tempfile
 import unittest
 from contextlib import redirect_stdout
@@ -83,6 +85,22 @@ class FakeHttpSession:
         if not self.responses:
             raise AssertionError("FakeHttpSession has no remaining responses.")
         return self.responses.pop(0)
+
+
+class BlockingAfterRewriteClient:
+    def __init__(self, rewritten_prompt):
+        self.rewritten_prompt = rewritten_prompt
+        self.calls: list[dict[str, object]] = []
+        self.rewrite_done = threading.Event()
+        self.allow_continue = threading.Event()
+
+    def chat(self, messages, **kwargs):
+        self.calls.append({"messages": messages, "kwargs": kwargs})
+        if len(self.calls) == 1:
+            self.rewrite_done.set()
+            return _rewrite_response(self.rewritten_prompt)
+        self.allow_continue.wait(timeout=2.0)
+        raise OpenRouterError("planner intentionally stopped")
 
 
 def _plan_response(item):
@@ -323,6 +341,10 @@ class OpenRouterPipelineTests(unittest.TestCase):
         self.assertEqual(result.item.prompt, rewritten)
         self.assertEqual(result.rewritten_prompt, rewritten)
         self.assertEqual(len(client.calls), 1)
+        prompt_text = client.calls[0]["messages"][1]["content"]
+        self.assertIn("35 to 60 words", prompt_text)
+        self.assertIn("noticeably richer", prompt_text)
+        self.assertIn("visual hierarchy", prompt_text)
 
     def test_reasoning_max_tokens_takes_precedence_over_effort(self) -> None:
         self.assertEqual(
@@ -672,6 +694,37 @@ class WebAppTests(unittest.TestCase):
                 data["trace"][0]["critic_reports"]["svg-quality"]["candidate-2"]["recommendation"],
                 "Keep this candidate concise.",
             )
+
+    def test_web_returns_rewritten_prompt_before_run_finishes(self) -> None:
+        prompt = "rocket"
+        rewritten = (
+            "a minimal rocket launch icon with a centered upward silhouette, clear fins, compact smoke puffs, "
+            "and a bold flame shape readable at small size"
+        )
+        fake_client = BlockingAfterRewriteClient(rewritten)
+        with tempfile.TemporaryDirectory() as tmp:
+            app = create_app(
+                output_root=Path(tmp),
+                client_factory=lambda model, timeout, retries: fake_client,
+                run_async=True,
+            )
+            client = app.test_client()
+
+            response = client.post("/api/runs", json={"prompt": prompt, "workflow": "single"})
+            data = response.get_json()
+            run_id = data["id"]
+            self.assertTrue(fake_client.rewrite_done.wait(timeout=2.0))
+
+            live = client.get(f"/api/runs/{run_id}").get_json()
+
+            self.assertEqual(live["prompt_rewrite"]["original_prompt"], prompt)
+            self.assertEqual(live["prompt_rewrite"]["rewritten_prompt"], rewritten)
+            fake_client.allow_continue.set()
+            for _ in range(20):
+                final = client.get(f"/api/runs/{run_id}").get_json()
+                if final["status"] == "failed":
+                    break
+                time.sleep(0.05)
 
     def test_web_outputs_route_serves_png_from_relative_output_root(self) -> None:
         with tempfile.TemporaryDirectory(dir=".") as tmp:
