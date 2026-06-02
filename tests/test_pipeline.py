@@ -19,6 +19,8 @@ from svg_icon_agent.cli import main
 from svg_icon_agent.exporter import render_svg_to_png
 from svg_icon_agent.llm_agents import (
     OpenRouterConsensusSelectorAgent,
+    OpenRouterGoalManagerAgent,
+    OpenRouterMemoryCuratorAgent,
     OpenRouterMultiCandidateGeneratorAgent,
     OpenRouterPlannerAgent,
     OpenRouterPromptRewriterAgent,
@@ -130,6 +132,42 @@ def _rewrite_response(text="a clear minimal cloud download icon with centered ar
         model="openai/gpt-oss-120b:free",
         usage={"completion_tokens": 18},
         raw={"choices": [{"message": {"content": "rewrite-json"}}]},
+    )
+
+
+def _goal_response():
+    return OpenRouterResponse(
+        content=json.dumps(
+            {
+                "objective": "Create a mobile-toolbar-ready cloud download icon.",
+                "visual_requirements": ["clear arrow", "compact cloud"],
+                "constraints": ["safe primitives", "readable at 32px"],
+                "acceptance_criteria": ["valid svg", "recognizable download action"],
+                "style_preferences": ["mixed"],
+                "avoid_patterns": ["tiny details"],
+            }
+        ),
+        model="openai/gpt-oss-120b:free",
+        usage={"completion_tokens": 28},
+        raw={"choices": [{"message": {"content": "goal-json"}}]},
+    )
+
+
+def _memory_curator_response():
+    return OpenRouterResponse(
+        content=json.dumps(
+            {
+                "summary": "Large arrows and compact cloud silhouettes work well for download icons.",
+                "success_patterns": ["large central arrow", "compact cloud"],
+                "failure_patterns": ["small arrowhead"],
+                "user_feedback": ["make the arrow stronger"],
+                "score": 94,
+                "tags": ["cloud", "download"],
+            }
+        ),
+        model="openai/gpt-oss-120b:free",
+        usage={"completion_tokens": 35},
+        raw={"choices": [{"message": {"content": "memory-json"}}]},
     )
 
 
@@ -362,6 +400,8 @@ class OpenRouterAgentBoundaryTests(unittest.TestCase):
     def test_all_agent_constructors_require_openrouter_client(self) -> None:
         for cls in (
             OpenRouterPlannerAgent,
+            OpenRouterGoalManagerAgent,
+            OpenRouterMemoryCuratorAgent,
             OpenRouterPromptRewriterAgent,
             OpenRouterSvgGeneratorAgent,
             OpenRouterMultiCandidateGeneratorAgent,
@@ -441,6 +481,39 @@ class OpenRouterPipelineTests(unittest.TestCase):
         self.assertIn("35 to 60 words", prompt_text)
         self.assertIn("noticeably richer", prompt_text)
         self.assertIn("visual hierarchy", prompt_text)
+
+    def test_goal_manager_creates_generation_goal(self) -> None:
+        item = make_prompt_from_text("a cloud download icon")
+        client = FakeOpenRouterClient([_goal_response()])
+
+        result = OpenRouterGoalManagerAgent(client).create_goal(item, manual_goal="mobile toolbar")
+
+        self.assertIn("mobile", result.goal.objective)
+        self.assertIn("clear-arrow", result.goal.visual_requirements)
+        self.assertIn("tiny-details", result.goal.avoid_patterns)
+        prompt = client.calls[0]["messages"][1]["content"]
+        self.assertIn("Manual goal", prompt)
+        self.assertIn("mobile toolbar", prompt)
+
+    def test_memory_curator_returns_short_record(self) -> None:
+        item = make_prompt_from_text("a cloud download icon")
+        plan_result = OpenRouterPlannerAgent(FakeOpenRouterClient([_plan_response(item)])).plan(item)
+        goal = OpenRouterGoalManagerAgent(FakeOpenRouterClient([_goal_response()])).create_goal(item).goal
+        client = FakeOpenRouterClient([_memory_curator_response()])
+
+        result = OpenRouterMemoryCuratorAgent(client).curate(
+            item,
+            plan_result.plan,
+            goal=goal,
+            trace={"refined_score": 94, "selector_rationale": "clear arrow"},
+            metrics={"refined_average_score": 94},
+        )
+
+        self.assertIn("compact-cloud", result.record["success_patterns"])
+        self.assertEqual(result.record["score"], 94)
+        prompt = client.calls[0]["messages"][1]["content"]
+        self.assertIn("Generation goal JSON", prompt)
+        self.assertIn("Trace JSON excerpt", prompt)
 
     def test_reasoning_max_tokens_takes_precedence_over_effort(self) -> None:
         self.assertEqual(

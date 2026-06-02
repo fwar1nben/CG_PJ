@@ -7,11 +7,14 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
-from svg_icon_agent.models import IconPlan, SvgArtifact, ValidationIssue, ValidationReport
+from svg_icon_agent.memory import MemoryContext
+from svg_icon_agent.models import GenerationGoal, IconPlan, SvgArtifact, ValidationIssue, ValidationReport
 from svg_icon_agent.openrouter_client import OpenRouterClient, OpenRouterError, OpenRouterResponse
 from svg_icon_agent.prompts import HEX_RE, PromptItem, VALID_CATEGORIES, VALID_STYLES
 
 DEFAULT_PLANNER_MAX_TOKENS = 900
+DEFAULT_GOAL_MAX_TOKENS = 900
+DEFAULT_MEMORY_CURATOR_MAX_TOKENS = 900
 DEFAULT_REWRITER_MAX_TOKENS = 700
 DEFAULT_SVG_MAX_TOKENS = 1800
 DEFAULT_VALIDATOR_MAX_TOKENS = 1200
@@ -23,6 +26,18 @@ DEFAULT_REFINER_MAX_TOKENS = 2200
 class LlmRewriteResult:
     item: PromptItem
     rewritten_prompt: str
+    response: OpenRouterResponse
+
+
+@dataclass(frozen=True)
+class LlmGoalResult:
+    goal: GenerationGoal
+    response: OpenRouterResponse
+
+
+@dataclass(frozen=True)
+class LlmMemoryCuratorResult:
+    record: dict[str, Any]
     response: OpenRouterResponse
 
 
@@ -118,7 +133,13 @@ class OpenRouterPromptRewriterAgent:
         self.max_tokens = max_tokens
         self.reasoning = reasoning
 
-    def rewrite(self, item: PromptItem) -> LlmRewriteResult:
+    def rewrite(
+        self,
+        item: PromptItem,
+        *,
+        goal: GenerationGoal | None = None,
+        memory_context: MemoryContext | None = None,
+    ) -> LlmRewriteResult:
         response = self.client.chat(
             [
                 {
@@ -130,7 +151,7 @@ class OpenRouterPromptRewriterAgent:
                 },
                 {
                     "role": "user",
-                    "content": _rewrite_prompt(item),
+                    "content": _rewrite_prompt(item, goal=goal, memory_context=memory_context),
                 },
             ],
             response_format={"type": "json_object"},
@@ -151,6 +172,52 @@ class OpenRouterPromptRewriterAgent:
         return LlmRewriteResult(item=rewritten_item, rewritten_prompt=rewritten, response=response)
 
 
+class OpenRouterGoalManagerAgent:
+    """Uses an OpenRouter model to turn prompt, manual goal, and memories into a generation goal."""
+
+    def __init__(
+        self,
+        client: OpenRouterClient,
+        max_tokens: int | None = None,
+        reasoning: dict[str, Any] | None = None,
+    ) -> None:
+        self.client = client
+        self.max_tokens = max_tokens
+        self.reasoning = reasoning
+
+    def create_goal(
+        self,
+        item: PromptItem,
+        *,
+        manual_goal: str | None = None,
+        memory_context: MemoryContext | None = None,
+    ) -> LlmGoalResult:
+        response = self.client.chat(
+            [
+                {
+                    "role": "system",
+                    "content": (
+                        "You are a goal manager agent for SVG icon generation. Return only JSON. "
+                        "Convert the user request into concrete visual goals, constraints, acceptance criteria, "
+                        "style preferences, and avoid patterns."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": _goal_prompt(item, manual_goal=manual_goal, memory_context=memory_context),
+                },
+            ],
+            response_format={"type": "json_object"},
+            reasoning=self.reasoning,
+            temperature=0.12,
+            max_tokens=self.max_tokens or DEFAULT_GOAL_MAX_TOKENS,
+        )
+        return LlmGoalResult(
+            goal=_coerce_goal(item, _json_object(response.content, "Goal manager"), manual_goal=manual_goal),
+            response=response,
+        )
+
+
 class OpenRouterPlannerAgent:
     """Uses an OpenRouter model to produce an IconPlan-compatible JSON object."""
 
@@ -164,7 +231,13 @@ class OpenRouterPlannerAgent:
         self.max_tokens = max_tokens
         self.reasoning = reasoning
 
-    def plan(self, item: PromptItem) -> LlmPlanResult:
+    def plan(
+        self,
+        item: PromptItem,
+        *,
+        goal: GenerationGoal | None = None,
+        memory_context: MemoryContext | None = None,
+    ) -> LlmPlanResult:
         response = self.client.chat(
             [
                 {
@@ -176,7 +249,7 @@ class OpenRouterPlannerAgent:
                 },
                 {
                     "role": "user",
-                    "content": _plan_prompt(item),
+                    "content": _plan_prompt(item, goal=goal, memory_context=memory_context),
                 },
             ],
             response_format={"type": "json_object"},
@@ -201,7 +274,14 @@ class OpenRouterSvgGeneratorAgent:
         self.max_tokens = max_tokens
         self.reasoning = reasoning
 
-    def generate(self, plan: IconPlan, stage: str = "baseline") -> LlmSvgResult:
+    def generate(
+        self,
+        plan: IconPlan,
+        stage: str = "baseline",
+        *,
+        goal: GenerationGoal | None = None,
+        memory_context: MemoryContext | None = None,
+    ) -> LlmSvgResult:
         response = self.client.chat(
             [
                 {
@@ -213,7 +293,7 @@ class OpenRouterSvgGeneratorAgent:
                 },
                 {
                     "role": "user",
-                    "content": _svg_prompt(plan),
+                    "content": _svg_prompt(plan, goal=goal, memory_context=memory_context),
                 },
             ],
             reasoning=self.reasoning,
@@ -248,7 +328,15 @@ class OpenRouterMultiCandidateGeneratorAgent:
             responses.append(result.response)
         return LlmCandidateBatchResult(artifacts=tuple(artifacts), responses=tuple(responses))
 
-    def generate_one(self, plan: IconPlan, *, candidate_index: int, candidate_count: int) -> LlmSvgResult:
+    def generate_one(
+        self,
+        plan: IconPlan,
+        *,
+        candidate_index: int,
+        candidate_count: int,
+        goal: GenerationGoal | None = None,
+        memory_context: MemoryContext | None = None,
+    ) -> LlmSvgResult:
         response = self.client.chat(
             [
                 {
@@ -260,7 +348,13 @@ class OpenRouterMultiCandidateGeneratorAgent:
                 },
                 {
                     "role": "user",
-                    "content": _candidate_svg_prompt(plan, candidate_index, candidate_count),
+                    "content": _candidate_svg_prompt(
+                        plan,
+                        candidate_index,
+                        candidate_count,
+                        goal=goal,
+                        memory_context=memory_context,
+                    ),
                 },
             ],
             reasoning=self.reasoning,
@@ -463,6 +557,8 @@ class OpenRouterSvgOptimizerAgent:
         *,
         manual_feedback: str | None = None,
         use_llm_feedback: bool = True,
+        goal: GenerationGoal | None = None,
+        memory_context: MemoryContext | None = None,
     ) -> LlmOptimizationResult:
         feedback_sources = _optimizer_feedback_sources(manual_feedback, use_llm_feedback)
         response = self.client.chat(
@@ -485,6 +581,8 @@ class OpenRouterSvgOptimizerAgent:
                         selection,
                         manual_feedback=manual_feedback,
                         use_llm_feedback=use_llm_feedback,
+                        goal=goal,
+                        memory_context=memory_context,
                     ),
                 },
             ],
@@ -496,6 +594,54 @@ class OpenRouterSvgOptimizerAgent:
             artifact=SvgArtifact(id=plan.id, stage="baseline", svg=_extract_svg(response.content)),
             response=response,
             feedback_sources=feedback_sources,
+        )
+
+
+class OpenRouterMemoryCuratorAgent:
+    """Uses an OpenRouter model to summarize a completed run into a reusable memory record."""
+
+    def __init__(
+        self,
+        client: OpenRouterClient,
+        max_tokens: int | None = None,
+        reasoning: dict[str, Any] | None = None,
+    ) -> None:
+        self.client = client
+        self.max_tokens = max_tokens
+        self.reasoning = reasoning
+
+    def curate(
+        self,
+        item: PromptItem,
+        plan: IconPlan,
+        *,
+        goal: GenerationGoal | None,
+        trace: dict[str, Any],
+        metrics: dict[str, Any],
+        memory_context: MemoryContext | None = None,
+    ) -> LlmMemoryCuratorResult:
+        response = self.client.chat(
+            [
+                {
+                    "role": "system",
+                    "content": (
+                        "You are a memory curator agent for an SVG icon generation system. Return only JSON. "
+                        "Create a short reusable memory that helps future similar icon generations."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": _memory_curator_prompt(item, plan, goal, trace, metrics, memory_context),
+                },
+            ],
+            response_format={"type": "json_object"},
+            reasoning=self.reasoning,
+            temperature=0.12,
+            max_tokens=self.max_tokens or DEFAULT_MEMORY_CURATOR_MAX_TOKENS,
+        )
+        return LlmMemoryCuratorResult(
+            record=_coerce_memory_record(_json_object(response.content, "Memory curator")),
+            response=response,
         )
 
 
@@ -553,7 +699,51 @@ class OpenRouterRefinerAgent:
         )
 
 
-def _rewrite_prompt(item: PromptItem) -> str:
+def _goal_prompt(
+    item: PromptItem,
+    *,
+    manual_goal: str | None,
+    memory_context: MemoryContext | None,
+) -> str:
+    manual_context = manual_goal.strip() if isinstance(manual_goal, str) and manual_goal.strip() else "No manual goal supplied."
+    return f"""Create a structured SVG icon generation goal.
+Return one JSON object with this exact shape:
+{{
+  "objective": "one concise sentence",
+  "visual_requirements": ["short requirement"],
+  "constraints": ["short constraint"],
+  "acceptance_criteria": ["short criterion"],
+  "style_preferences": ["short preference"],
+  "avoid_patterns": ["short avoid pattern"]
+}}
+
+Rules:
+- The goal is for a 256x256 editable SVG icon.
+- Preserve the user's original intent.
+- Use retrieved memories only as guidance; do not copy old SVG code.
+- Make acceptance criteria concrete enough for later Agent evaluation.
+- Do not include markdown or SVG code.
+
+Original prompt:
+{item.prompt}
+
+Manual goal:
+{manual_context}
+
+Category hint: {item.category}
+Style hint: {item.style}
+
+Retrieved memory context:
+{_memory_context_text(memory_context)}
+"""
+
+
+def _rewrite_prompt(
+    item: PromptItem,
+    *,
+    goal: GenerationGoal | None = None,
+    memory_context: MemoryContext | None = None,
+) -> str:
     return f"""Rewrite and enrich this icon request for a text-to-SVG icon agent.
 Return one JSON object with this exact shape:
 {{
@@ -575,10 +765,21 @@ Original prompt:
 
 Category hint: {item.category}
 Style hint: {item.style}
+
+Generation goal JSON:
+{_goal_json_text(goal)}
+
+Retrieved memory context:
+{_memory_context_text(memory_context)}
 """
 
 
-def _plan_prompt(item: PromptItem) -> str:
+def _plan_prompt(
+    item: PromptItem,
+    *,
+    goal: GenerationGoal | None = None,
+    memory_context: MemoryContext | None = None,
+) -> str:
     return f"""Create a JSON object for a 256x256 SVG icon plan.
 Required keys:
 - category: one of ui, object, scene
@@ -593,10 +794,21 @@ id: {item.id}
 category hint: {item.category}
 style hint: {item.style}
 prompt: {item.prompt}
+
+Generation goal JSON:
+{_goal_json_text(goal)}
+
+Retrieved memory context:
+{_memory_context_text(memory_context)}
 """
 
 
-def _svg_prompt(plan: IconPlan) -> str:
+def _svg_prompt(
+    plan: IconPlan,
+    *,
+    goal: GenerationGoal | None = None,
+    memory_context: MemoryContext | None = None,
+) -> str:
     motifs = ", ".join(plan.motifs)
     constraints = ", ".join(plan.constraints)
     return f"""Generate one complete SVG for this icon plan.
@@ -615,10 +827,23 @@ Style: {plan.style}
 Motifs: {motifs}
 Layout: {plan.layout}
 Constraints: {constraints}
+
+Generation goal JSON:
+{_goal_json_text(goal)}
+
+Retrieved memory context:
+{_memory_context_text(memory_context)}
 """
 
 
-def _candidate_svg_prompt(plan: IconPlan, candidate_index: int, candidate_count: int) -> str:
+def _candidate_svg_prompt(
+    plan: IconPlan,
+    candidate_index: int,
+    candidate_count: int,
+    *,
+    goal: GenerationGoal | None = None,
+    memory_context: MemoryContext | None = None,
+) -> str:
     motifs = ", ".join(plan.motifs)
     constraints = ", ".join(plan.constraints)
     return f"""Generate candidate {candidate_index} of {candidate_count} for this icon plan.
@@ -639,6 +864,12 @@ Style: {plan.style}
 Motifs: {motifs}
 Layout: {plan.layout}
 Constraints: {constraints}
+
+Generation goal JSON:
+{_goal_json_text(goal)}
+
+Retrieved memory context:
+{_memory_context_text(memory_context)}
 """
 
 
@@ -752,6 +983,8 @@ def _optimization_prompt(
     *,
     manual_feedback: str | None,
     use_llm_feedback: bool,
+    goal: GenerationGoal | None = None,
+    memory_context: MemoryContext | None = None,
 ) -> str:
     manual = manual_feedback.strip() if isinstance(manual_feedback, str) else ""
     llm_context = ""
@@ -785,6 +1018,12 @@ Hard requirements:
 Icon plan JSON:
 {json.dumps(plan.to_json(), indent=2)}
 
+Generation goal JSON:
+{_goal_json_text(goal)}
+
+Retrieved memory context:
+{_memory_context_text(memory_context)}
+
 Manual optimizer feedback:
 {manual_context}
 {llm_context}
@@ -793,6 +1032,50 @@ Deterministic SvgCheckTool report JSON:
 
 Selected SVG to optimize:
 {selected_artifact.svg}
+"""
+
+
+def _memory_curator_prompt(
+    item: PromptItem,
+    plan: IconPlan,
+    goal: GenerationGoal | None,
+    trace: dict[str, Any],
+    metrics: dict[str, Any],
+    memory_context: MemoryContext | None,
+) -> str:
+    return f"""Summarize this completed SVG icon run into a reusable memory record.
+Return one JSON object with this exact shape:
+{{
+  "summary": "one concise reusable lesson",
+  "success_patterns": ["short reusable design strategy"],
+  "failure_patterns": ["short failure or risk to avoid"],
+  "user_feedback": ["short user preference or manual advice"],
+  "score": integer from 0 to 100,
+  "tags": ["short lowercase tag"]
+}}
+
+Rules:
+- Keep it short and useful for future similar icon generations.
+- Do not include API keys, raw private payloads, full SVG code, or long model responses.
+- Prefer design lessons, avoid patterns, and user feedback over implementation logs.
+
+Prompt item JSON:
+{json.dumps(item.__dict__, indent=2)}
+
+Icon plan JSON:
+{json.dumps(plan.to_json(), indent=2)}
+
+Generation goal JSON:
+{_goal_json_text(goal)}
+
+Trace JSON excerpt:
+{json.dumps(_trim_trace(trace), indent=2)}
+
+Metrics JSON:
+{json.dumps(metrics, indent=2)}
+
+Previously retrieved memories:
+{_memory_context_text(memory_context)}
 """
 
 
@@ -963,6 +1246,41 @@ def _coerce_plan(item: PromptItem, data: dict[str, Any]) -> IconPlan:
         layout=str(layout).strip().lower().replace(" ", "-"),
         constraints=constraints,
     )
+
+
+def _coerce_goal(item: PromptItem, data: dict[str, Any], *, manual_goal: str | None) -> GenerationGoal:
+    objective_fallback = manual_goal or f"Create a clear editable SVG icon for: {item.prompt}"
+    return GenerationGoal(
+        objective=_coerce_text(data.get("objective"), fallback=objective_fallback),
+        visual_requirements=_coerce_string_tuple(
+            data.get("visual_requirements"),
+            fallback=("clear-main-silhouette", "small-size-readable"),
+        ),
+        constraints=_coerce_string_tuple(
+            data.get("constraints"),
+            fallback=("safe-svg-primitives-only", "square-256-canvas"),
+        ),
+        acceptance_criteria=_coerce_string_tuple(
+            data.get("acceptance_criteria"),
+            fallback=("recognizable-at-32px", "valid-safe-svg"),
+        ),
+        style_preferences=_coerce_string_tuple(data.get("style_preferences"), fallback=(item.style,)),
+        avoid_patterns=_coerce_string_tuple(
+            data.get("avoid_patterns"),
+            fallback=("no-raster-images", "no-unnecessary-complexity"),
+        ),
+    )
+
+
+def _coerce_memory_record(data: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "summary": _coerce_text(data.get("summary"), fallback="Reusable SVG icon generation lesson."),
+        "success_patterns": list(_coerce_string_tuple(data.get("success_patterns"), fallback=())),
+        "failure_patterns": list(_coerce_string_tuple(data.get("failure_patterns"), fallback=())),
+        "user_feedback": list(_coerce_string_tuple(data.get("user_feedback"), fallback=())),
+        "score": _coerce_score(data.get("score"), fallback=0),
+        "tags": list(_coerce_string_tuple(data.get("tags"), fallback=())),
+    }
 
 
 def _coerce_validation_report(
@@ -1148,6 +1466,52 @@ def _merge_constraints(existing: tuple[str, ...], required: tuple[str, ...]) -> 
         if item not in merged:
             merged.append(item)
     return tuple(merged)
+
+
+def _goal_json_text(goal: GenerationGoal | None) -> str:
+    if goal is None:
+        return "No generation goal provided."
+    return json.dumps(goal.to_json(), indent=2)
+
+
+def _memory_context_text(memory_context: MemoryContext | None) -> str:
+    if memory_context is None or not memory_context.records:
+        return "No retrieved memories."
+    rows = []
+    for item in memory_context.records:
+        record = item.record
+        rows.append(
+            {
+                "id": record.id,
+                "score": round(item.score, 4),
+                "prompt": record.prompt,
+                "summary": record.summary,
+                "success_patterns": list(record.success_patterns[:3]),
+                "failure_patterns": list(record.failure_patterns[:3]),
+                "user_feedback": list(record.user_feedback[:3]),
+                "tags": list(record.tags[:6]),
+            }
+        )
+    return json.dumps(rows, indent=2)
+
+
+def _trim_trace(trace: dict[str, Any]) -> dict[str, Any]:
+    allowed = {
+        "id",
+        "workflow",
+        "selected_candidate_id",
+        "selector_rationale",
+        "selector_repair_brief",
+        "manual_optimizer_feedback",
+        "post_run_optimizer_feedback",
+        "baseline_score",
+        "baseline_valid",
+        "refined_score",
+        "refined_valid",
+        "score_delta",
+        "errors",
+    }
+    return {key: value for key, value in trace.items() if key in allowed}
 
 
 def _extract_svg(content: str) -> str:
