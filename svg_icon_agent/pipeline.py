@@ -65,6 +65,7 @@ def run_single_prompt_pipeline(
     max_refine_rounds: int = 3,
     request_timeout: float = 60.0,
     max_retries: int = 2,
+    max_tokens: int | None = None,
     client: OpenRouterClient | None = None,
     progress: ProgressLogger | None = None,
 ) -> PipelineRunResult:
@@ -75,6 +76,7 @@ def run_single_prompt_pipeline(
         max_refine_rounds=max_refine_rounds,
         request_timeout=request_timeout,
         max_retries=max_retries,
+        max_tokens=max_tokens,
         client=client,
         progress=progress,
     )
@@ -88,6 +90,7 @@ def run_prompt_pipeline(
     max_refine_rounds: int = 3,
     request_timeout: float = 60.0,
     max_retries: int = 2,
+    max_tokens: int | None = None,
     client: OpenRouterClient | None = None,
     progress: ProgressLogger | None = None,
 ) -> PipelineRunResult:
@@ -112,6 +115,7 @@ def run_prompt_pipeline(
             client=active_client,
             request_timeout=request_timeout,
             max_retries=max_retries,
+            max_tokens=max_tokens,
             progress=logger,
         )
     except (OpenRouterError, ValueError) as exc:
@@ -164,6 +168,7 @@ def run_prompt_pipeline(
         client=active_client,
         max_rounds=max_refine_rounds,
         model=model,
+        max_tokens=max_tokens,
         progress=logger,
     )
     _merge_refinement_traces(trace_by_id, refinements)

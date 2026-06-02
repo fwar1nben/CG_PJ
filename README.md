@@ -26,7 +26,8 @@ export OPENROUTER_MODEL="openai/gpt-oss-120b:free"
   --out outputs \
   --backend openrouter \
   --request-timeout 30 \
-  --max-retries 1
+  --max-retries 1 \
+  --max-tokens 4096
 ```
 
 Manual input is also supported:
@@ -93,6 +94,7 @@ used as a toolchain for syntax/safety checks, rendering, and report export.
 - `--model`: OpenRouter model id, default `openai/gpt-oss-120b:free`.
 - `--request-timeout`: per-request OpenRouter timeout in seconds.
 - `--max-retries`: retry count for retryable OpenRouter failures.
+- `--max-tokens`: optional `max_tokens` override for each OpenRouter Agent request.
 - `--llm-stage plan-svg`: the LLM performs both planning and SVG drafting.
 - `--max-refine-rounds`: maximum LLM repair rounds after validation.
 - `--quiet`: hide realtime progress logs.

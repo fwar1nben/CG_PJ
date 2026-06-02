@@ -62,6 +62,7 @@ def refine_artifacts(
     client: OpenRouterClient,
     max_rounds: int = 3,
     model: str = DEFAULT_OPENROUTER_MODEL,
+    max_tokens: int | None = None,
     progress: ProgressLogger | None = None,
 ) -> list[RefinementResult]:
     by_id = {plan.id: plan for plan in plans}
@@ -71,8 +72,8 @@ def refine_artifacts(
 
     logger = progress or ProgressLogger(verbose=False)
     checker = SvgCheckTool()
-    llm_validator = OpenRouterValidatorAgent(client)
-    llm_refiner = OpenRouterRefinerAgent(client)
+    llm_validator = OpenRouterValidatorAgent(client, max_tokens=max_tokens)
+    llm_refiner = OpenRouterRefinerAgent(client, max_tokens=max_tokens)
     results: list[RefinementResult] = []
 
     total = len(artifacts)

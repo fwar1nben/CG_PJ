@@ -174,7 +174,7 @@ class OpenRouterPipelineTests(unittest.TestCase):
         item = load_prompts(PROMPT_PATH)[0]
         client = FakeOpenRouterClient([_plan_response(item)])
 
-        result = OpenRouterPlannerAgent(client).plan(item)
+        result = OpenRouterPlannerAgent(client, max_tokens=4096).plan(item)
 
         self.assertEqual(result.plan.id, item.id)
         self.assertEqual(result.plan.category, "ui")
@@ -182,6 +182,7 @@ class OpenRouterPipelineTests(unittest.TestCase):
         self.assertIn("square-256-canvas", result.plan.constraints)
         self.assertEqual(result.response.usage["completion_tokens"], 20)
         self.assertEqual(len(client.calls), 1)
+        self.assertEqual(client.calls[0]["kwargs"]["max_tokens"], 4096)
 
     def test_pipeline_calls_planner_generator_validator_and_refiner(self) -> None:
         item = load_prompts(PROMPT_PATH)[0]
@@ -338,17 +339,19 @@ class WebAppTests(unittest.TestCase):
             )
             client = app.test_client()
 
-            response = client.post("/api/runs", json={"prompt": prompt})
+            response = client.post("/api/runs", json={"prompt": prompt, "max_tokens": 4096})
             data = response.get_json()
 
             self.assertEqual(response.status_code, 200)
             self.assertEqual(data["status"], "completed")
+            self.assertEqual(data["max_tokens"], 4096)
             self.assertIn("baseline_svg_text", data["artifacts"])
             self.assertIn("refined_png_url", data["artifacts"])
             self.assertEqual(data["trace"][0]["planner_backend"], "openrouter")
             self.assertEqual(data["trace"][0]["validator_backend"], "openrouter")
             self.assertEqual([event["stage"] for event in data["raw_events"]], ["planner", "svg", "validator"])
             self.assertTrue(any(event["stage"] == "validator" for event in data["events"]))
+            self.assertTrue(all(call["kwargs"]["max_tokens"] == 4096 for call in fake_client.calls))
 
     def test_web_planner_failure_does_not_generate_local_fallback(self) -> None:
         fake_client = FakeOpenRouterClient([OpenRouterError("rate limited", debug_payload={"body": "try later"})])

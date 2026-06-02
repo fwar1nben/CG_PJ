@@ -30,6 +30,7 @@ class WebRun:
     max_refine_rounds: int
     request_timeout: float
     max_retries: int
+    max_tokens: int | None
     status: str = "queued"
     error: str | None = None
     created_at: float = field(default_factory=time.time)
@@ -66,6 +67,7 @@ def create_app(
         max_refine_rounds = _int_value(payload.get("max_refine_rounds"), 3, minimum=0, maximum=8)
         request_timeout = _float_value(payload.get("request_timeout"), 60.0, minimum=5.0, maximum=300.0)
         max_retries = _int_value(payload.get("max_retries"), 2, minimum=0, maximum=5)
+        max_tokens = _optional_int_value(payload.get("max_tokens"), minimum=256, maximum=20000)
         run_id = f"{int(time.time())}-{uuid.uuid4().hex[:8]}"
         run = WebRun(
             id=run_id,
@@ -75,6 +77,7 @@ def create_app(
             max_refine_rounds=max_refine_rounds,
             request_timeout=request_timeout,
             max_retries=max_retries,
+            max_tokens=max_tokens,
         )
         with lock:
             runs[run_id] = run
@@ -102,7 +105,7 @@ def create_app(
             output_dir = root / run_id
             if not output_dir.exists():
                 return jsonify({"error": "Run not found."}), 404
-            run = WebRun(id=run_id, prompt="", model="", output_dir=output_dir, max_refine_rounds=0, request_timeout=0, max_retries=0)
+            run = WebRun(id=run_id, prompt="", model="", output_dir=output_dir, max_refine_rounds=0, request_timeout=0, max_retries=0, max_tokens=None)
             run.status = "completed" if (output_dir / "metrics.json").exists() else "failed"
         return jsonify(_run_payload(run))
 
@@ -132,6 +135,7 @@ def _execute_run(run: WebRun, client_factory: ClientFactory | None) -> None:
             max_refine_rounds=run.max_refine_rounds,
             request_timeout=run.request_timeout,
             max_retries=run.max_retries,
+            max_tokens=run.max_tokens,
             client=client,
             progress=logger,
         )
@@ -152,6 +156,7 @@ def _run_payload(run: WebRun, *, include_files: bool = True) -> dict[str, Any]:
         "id": run.id,
         "prompt": run.prompt,
         "model": run.model,
+        "max_tokens": run.max_tokens,
         "status": run.status,
         "error": run.error,
         "created_at": run.created_at,
@@ -243,6 +248,16 @@ def _float_value(value: Any, fallback: float, *, minimum: float, maximum: float)
         parsed = float(value)
     except (TypeError, ValueError):
         parsed = fallback
+    return max(minimum, min(maximum, parsed))
+
+
+def _optional_int_value(value: Any, *, minimum: int, maximum: int) -> int | None:
+    if value in {None, ""}:
+        return None
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return None
     return max(minimum, min(maximum, parsed))
 
 
@@ -498,6 +513,10 @@ _INDEX_HTML = """<!doctype html>
           <input id="timeout" type="number" min="5" max="300" value="60">
         </div>
       </div>
+      <div>
+        <label for="maxTokens">Max tokens</label>
+        <input id="maxTokens" type="number" min="256" max="20000" value="4096">
+      </div>
       <button id="runButton" type="button">Run</button>
       <div id="status" class="status">Idle</div>
     </aside>
@@ -555,7 +574,8 @@ _INDEX_HTML = """<!doctype html>
         prompt: document.getElementById('prompt').value,
         model: document.getElementById('model').value,
         max_refine_rounds: Number(document.getElementById('rounds').value),
-        request_timeout: Number(document.getElementById('timeout').value)
+        request_timeout: Number(document.getElementById('timeout').value),
+        max_tokens: Number(document.getElementById('maxTokens').value) || null
       };
       runButton.disabled = true;
       setStatus('Submitting run...', '');

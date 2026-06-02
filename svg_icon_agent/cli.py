@@ -41,6 +41,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Retry count for retryable OpenRouter request failures.",
     )
     parser.add_argument(
+        "--max-tokens",
+        type=int,
+        default=None,
+        help="Optional max_tokens override for each OpenRouter agent request.",
+    )
+    parser.add_argument(
         "--llm-stage",
         choices=["plan-svg"],
         default="plan-svg",
@@ -74,6 +80,7 @@ def main(argv: list[str] | None = None) -> int:
         max_refine_rounds=args.max_refine_rounds,
         request_timeout=args.request_timeout,
         max_retries=args.max_retries,
+        max_tokens=args.max_tokens,
         progress=progress,
     )
     if result.status != "completed":
@@ -110,4 +117,3 @@ def _load_input_prompts(args: argparse.Namespace) -> list[PromptItem]:
 def _print_prompt_cases(prompts: list[PromptItem]) -> None:
     for item in prompts:
         print(f"{item.id}\t{item.category}\t{item.prompt}")
-
