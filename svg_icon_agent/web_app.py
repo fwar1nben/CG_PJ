@@ -33,6 +33,8 @@ class WebRun:
     max_tokens: int | None
     reasoning_effort: str | None
     reasoning_max_tokens: int | None
+    workflow: str
+    candidate_count: int
     status: str = "queued"
     error: str | None = None
     created_at: float = field(default_factory=time.time)
@@ -72,6 +74,8 @@ def create_app(
         max_tokens = _optional_int_value(payload.get("max_tokens"), minimum=256, maximum=20000)
         reasoning_effort = _reasoning_effort_value(payload.get("reasoning_effort"))
         reasoning_max_tokens = _optional_int_value(payload.get("reasoning_max_tokens"), minimum=0, maximum=20000)
+        workflow = _workflow_value(payload.get("workflow"))
+        candidate_count = _int_value(payload.get("candidate_count"), 3, minimum=1, maximum=6)
         run_id = f"{int(time.time())}-{uuid.uuid4().hex[:8]}"
         run = WebRun(
             id=run_id,
@@ -84,6 +88,8 @@ def create_app(
             max_tokens=max_tokens,
             reasoning_effort=reasoning_effort,
             reasoning_max_tokens=reasoning_max_tokens,
+            workflow=workflow,
+            candidate_count=candidate_count,
         )
         with lock:
             runs[run_id] = run
@@ -122,6 +128,8 @@ def create_app(
                 max_tokens=None,
                 reasoning_effort=None,
                 reasoning_max_tokens=None,
+                workflow="collaborative",
+                candidate_count=3,
             )
             run.status = "completed" if (output_dir / "metrics.json").exists() else "failed"
         return jsonify(_run_payload(run))
@@ -155,6 +163,8 @@ def _execute_run(run: WebRun, client_factory: ClientFactory | None) -> None:
             max_tokens=run.max_tokens,
             reasoning_effort=run.reasoning_effort,
             reasoning_max_tokens=run.reasoning_max_tokens,
+            workflow=run.workflow,
+            candidate_count=run.candidate_count,
             client=client,
             progress=logger,
         )
@@ -178,6 +188,8 @@ def _run_payload(run: WebRun, *, include_files: bool = True) -> dict[str, Any]:
         "max_tokens": run.max_tokens,
         "reasoning_effort": run.reasoning_effort,
         "reasoning_max_tokens": run.reasoning_max_tokens,
+        "workflow": run.workflow,
+        "candidate_count": run.candidate_count,
         "status": run.status,
         "error": run.error,
         "created_at": run.created_at,
@@ -216,6 +228,18 @@ def _artifact_payload(run: WebRun) -> dict[str, Any]:
         artifacts["baseline_svg_text"] = baseline_svg.read_text(encoding="utf-8")
     if refined_svg.exists():
         artifacts["refined_svg_text"] = refined_svg.read_text(encoding="utf-8")
+    candidate_dir = run.output_dir / "candidates"
+    candidates = []
+    for path in sorted(candidate_dir.glob(f"{artifact_id}-candidate-*.svg")):
+        relative = Path("candidates") / path.name
+        candidate = {
+            "id": path.stem.replace(f"{artifact_id}-", ""),
+            "svg_text": path.read_text(encoding="utf-8"),
+            "svg_url": url_for("web_outputs", run_id=run.id, filename=str(relative)),
+        }
+        candidates.append(candidate)
+    if candidates:
+        artifacts["candidates"] = candidates
     return artifacts
 
 
@@ -289,6 +313,13 @@ def _reasoning_effort_value(value: Any) -> str | None:
     if effort not in {"none", "minimal", "low", "medium", "high", "xhigh"}:
         return "none"
     return effort
+
+
+def _workflow_value(value: Any) -> str:
+    workflow = str(value or "collaborative").strip().lower()
+    if workflow not in {"collaborative", "single"}:
+        return "collaborative"
+    return workflow
 
 
 _INDEX_HTML = """<!doctype html>
@@ -382,7 +413,7 @@ _INDEX_HTML = """<!doctype html>
     }
     .workspace {
       display: grid;
-      grid-template-rows: auto minmax(360px, 1fr) minmax(260px, 42vh);
+      grid-template-rows: auto minmax(360px, 1fr) auto minmax(260px, 42vh);
       gap: 16px;
     }
     .topbar {
@@ -407,6 +438,16 @@ _INDEX_HTML = """<!doctype html>
       grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 16px;
       padding: 16px;
+    }
+    .candidates {
+      padding: 16px;
+      display: grid;
+      gap: 12px;
+    }
+    .candidate-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 12px;
     }
     figure {
       margin: 0;
@@ -517,6 +558,7 @@ _INDEX_HTML = """<!doctype html>
       main { grid-template-columns: 1fr; }
       aside { min-height: auto; }
       .previews { grid-template-columns: 1fr; }
+      .candidate-grid { grid-template-columns: 1fr; }
       .event { grid-template-columns: 64px 92px minmax(0, 1fr); }
     }
   </style>
@@ -532,6 +574,19 @@ _INDEX_HTML = """<!doctype html>
       <div>
         <label for="model">Model</label>
         <input id="model" value="__MODEL__">
+      </div>
+      <div class="row">
+        <div>
+          <label for="workflow">Workflow</label>
+          <select id="workflow">
+            <option value="collaborative" selected>collaborative</option>
+            <option value="single">single</option>
+          </select>
+        </div>
+        <div>
+          <label for="candidateCount">Candidates</label>
+          <input id="candidateCount" type="number" min="1" max="6" value="3">
+        </div>
       </div>
       <div class="row">
         <div>
@@ -587,6 +642,10 @@ _INDEX_HTML = """<!doctype html>
           <figcaption id="refinedCaption">Waiting for Validator and Refiner Agents</figcaption>
         </figure>
       </section>
+      <section class="candidates">
+        <h2>Candidate Drafts</h2>
+        <div id="candidateGrid" class="candidate-grid"><div class="empty">No candidates yet</div></div>
+      </section>
       <section class="log-panel">
         <div class="tabs">
           <button class="tab active" data-tab="timeline" type="button">Flow</button>
@@ -621,6 +680,8 @@ _INDEX_HTML = """<!doctype html>
         prompt: document.getElementById('prompt').value,
         model: document.getElementById('model').value,
         max_refine_rounds: Number(document.getElementById('rounds').value),
+        workflow: document.getElementById('workflow').value,
+        candidate_count: Number(document.getElementById('candidateCount').value),
         request_timeout: Number(document.getElementById('timeout').value),
         max_tokens: Number(document.getElementById('maxTokens').value) || null,
         reasoning_effort: document.getElementById('reasoningEffort').value,
@@ -665,6 +726,7 @@ _INDEX_HTML = """<!doctype html>
       renderJson('trace', data.trace || data.summary || {});
       renderJson('raw', data.raw_events || []);
       renderArtifacts(data.artifacts || {});
+      renderCandidates((data.artifacts || {}).candidates || [], data.trace || []);
     }
 
     function statusText(data) {
@@ -706,6 +768,21 @@ _INDEX_HTML = """<!doctype html>
       document.getElementById('refinedCaption').textContent = artifacts.refined_png_url || 'Waiting for Refiner Agent';
       baseline.innerHTML = artifacts.baseline_svg_text ? artifacts.baseline_svg_text : '<div class="empty">No baseline SVG</div>';
       refined.innerHTML = artifacts.refined_png_url ? `<img src="${artifacts.refined_png_url}" alt="Refined PNG">` : '<div class="empty">No refined PNG</div>';
+    }
+
+    function renderCandidates(candidates, trace) {
+      const grid = document.getElementById('candidateGrid');
+      if (!candidates.length) {
+        grid.innerHTML = '<div class="empty">No candidates yet</div>';
+        return;
+      }
+      const winner = trace && trace[0] ? trace[0].selected_candidate_id : null;
+      grid.innerHTML = candidates.map((candidate) => `
+        <figure>
+          <div class="figure-title">${escapeHtml(candidate.id)}${candidate.id === winner ? ' selected' : ''}</div>
+          <div class="preview-box svg-preview">${candidate.svg_text || '<div class="empty">No SVG</div>'}</div>
+        </figure>
+      `).join('');
     }
 
     function escapeHtml(value) {

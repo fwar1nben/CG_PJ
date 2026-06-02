@@ -146,6 +146,20 @@ def _selection_response(winner="candidate-2"):
     )
 
 
+def _collaborative_success_responses(item, winner="candidate-2"):
+    candidate_ids = ["candidate-1", "candidate-2", "candidate-3"]
+    return [
+        _plan_response(item),
+        _svg_response(VALID_SVG),
+        _svg_response(VALID_SVG.replace("Cloud Download", "Cloud Download Alt")),
+        _svg_response(VALID_SVG.replace("Cloud Download", "Cloud Download Simple")),
+        _critique_response(candidate_ids, scores=[72, 91, 84]),
+        _critique_response(candidate_ids, scores=[80, 88, 82]),
+        _selection_response(winner),
+        _validation_response(valid=True, score=100, issues=[]),
+    ]
+
+
 class PromptTests(unittest.TestCase):
     def test_examples_have_expected_coverage(self) -> None:
         prompts = load_prompts(PROMPT_PATH)
@@ -319,6 +333,28 @@ class OpenRouterPipelineTests(unittest.TestCase):
         self.assertEqual(selection.winner_candidate_id, "candidate-2")
         self.assertIn("silhouette", selection.repair_brief)
 
+    def test_collaborative_backend_selects_candidate_and_records_trace(self) -> None:
+        item = load_prompts(PROMPT_PATH)[0]
+        client = FakeOpenRouterClient(_collaborative_success_responses(item)[:-1])
+
+        backend = generate_with_backend(
+            [item],
+            backend="openrouter",
+            model="openai/gpt-oss-120b:free",
+            llm_stage="plan-svg",
+            workflow="collaborative",
+            candidate_count=3,
+            client=client,
+        )
+
+        self.assertEqual(len(backend.artifacts), 1)
+        self.assertEqual(len(backend.candidate_artifacts), 3)
+        self.assertEqual(backend.traces[0].workflow, "collaborative")
+        self.assertEqual(backend.traces[0].selected_candidate_id, "candidate-2")
+        self.assertEqual(backend.traces[0].svg_backend, "openrouter-collaborative")
+        self.assertIn("semantic", backend.traces[0].critic_scores)
+        self.assertIn(item.id, backend.selection_briefs)
+
     def test_openrouter_failure_does_not_fall_back_to_local_svg(self) -> None:
         item = load_prompts(PROMPT_PATH)[0]
         client = FakeOpenRouterClient([OpenRouterError("rate limited", debug_payload={"body": "try later"})])
@@ -381,7 +417,7 @@ class CliTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             output = Path(tmp)
             with patch("svg_icon_agent.pipeline.create_openrouter_client", return_value=client):
-                exit_code = main(["--text", prompt, "--out", str(output), "--quiet"])
+                exit_code = main(["--text", prompt, "--out", str(output), "--workflow", "single", "--quiet"])
 
             self.assertEqual(exit_code, 0)
             self.assertEqual(len(list((output / "baseline").glob("*.svg"))), 1)
@@ -405,7 +441,9 @@ class CliTests(unittest.TestCase):
             output = Path(tmp)
             with patch("svg_icon_agent.pipeline.create_openrouter_client", return_value=client):
                 with patch.dict(os.environ, {"OPENROUTER_API_KEY": "secret-test-key"}, clear=False):
-                    exit_code = main(["--text", prompt, "--out", str(output), "--quiet"])
+                    exit_code = main(["--text", prompt, "--out", str(output), "--workflow", "single", "--quiet"])
+
+            self.assertEqual(exit_code, 0)
 
             trace_text = (output / "llm_trace.json").read_text(encoding="utf-8")
             raw_text = (output / "llm_raw_responses.jsonl").read_text(encoding="utf-8")
@@ -439,6 +477,7 @@ class WebAppTests(unittest.TestCase):
                 json={
                     "prompt": prompt,
                     "max_tokens": 4096,
+                    "workflow": "single",
                     "reasoning_effort": "none",
                     "reasoning_max_tokens": 128,
                 },
@@ -469,7 +508,7 @@ class WebAppTests(unittest.TestCase):
             )
             client = app.test_client()
 
-            response = client.post("/api/runs", json={"prompt": "a minimal rocket launch icon"})
+            response = client.post("/api/runs", json={"prompt": "a minimal rocket launch icon", "workflow": "single"})
             data = response.get_json()
 
             self.assertEqual(response.status_code, 200)
@@ -495,13 +534,38 @@ class WebAppTests(unittest.TestCase):
                     client_factory=lambda model, timeout, retries: fake_client,
                     run_async=False,
                 )
-                response = app.test_client().post("/api/runs", json={"prompt": prompt})
+                response = app.test_client().post("/api/runs", json={"prompt": prompt, "workflow": "single"})
 
             data = response.get_json()
             raw_text = json.dumps(data["raw_events"])
             self.assertEqual(response.status_code, 200)
             self.assertNotIn("secret-test-key", raw_text)
             self.assertNotIn("OPENROUTER_API_KEY", raw_text)
+
+    def test_web_collaborative_run_returns_candidates_and_selector_trace(self) -> None:
+        prompt = "a minimal cloud download icon with a clear arrow"
+        item = make_prompt_from_text(prompt, source="web")
+        fake_client = FakeOpenRouterClient(_collaborative_success_responses(item))
+        with tempfile.TemporaryDirectory() as tmp:
+            app = create_app(
+                output_root=Path(tmp),
+                client_factory=lambda model, timeout, retries: fake_client,
+                run_async=False,
+            )
+
+            response = app.test_client().post(
+                "/api/runs",
+                json={"prompt": prompt, "workflow": "collaborative", "candidate_count": 3},
+            )
+            data = response.get_json()
+
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(data["status"], "completed")
+            self.assertEqual(data["workflow"], "collaborative")
+            self.assertEqual(data["candidate_count"], 3)
+            self.assertEqual(len(data["artifacts"]["candidates"]), 3)
+            self.assertEqual(data["trace"][0]["selected_candidate_id"], "candidate-2")
+            self.assertEqual(data["trace"][0]["svg_backend"], "openrouter-collaborative")
 
     def test_web_outputs_route_serves_png_from_relative_output_root(self) -> None:
         with tempfile.TemporaryDirectory(dir=".") as tmp:

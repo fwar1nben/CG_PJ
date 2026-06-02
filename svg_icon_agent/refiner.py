@@ -64,6 +64,7 @@ def refine_artifacts(
     model: str = DEFAULT_OPENROUTER_MODEL,
     max_tokens: int | None = None,
     reasoning: dict[str, Any] | None = None,
+    collaboration_briefs: dict[str, str] | None = None,
     progress: ProgressLogger | None = None,
 ) -> list[RefinementResult]:
     by_id = {plan.id: plan for plan in plans}
@@ -90,6 +91,7 @@ def refine_artifacts(
                 llm_refiner=llm_refiner,
                 max_rounds=max_rounds,
                 model=model,
+                collaboration_brief=(collaboration_briefs or {}).get(artifact.id),
                 progress=logger,
                 index=index,
                 total=total,
@@ -107,6 +109,7 @@ def _refine_one(
     llm_refiner: OpenRouterRefinerAgent,
     max_rounds: int,
     model: str,
+    collaboration_brief: str | None,
     progress: ProgressLogger,
     index: int,
     total: int,
@@ -163,6 +166,7 @@ def _refine_one(
                 report,
                 tool_report,
                 round_index=round_index + 1,
+                collaboration_brief=collaboration_brief,
             )
         except OpenRouterError as exc:
             refiner_status = "openrouter-error"

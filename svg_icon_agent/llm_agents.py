@@ -181,27 +181,34 @@ class OpenRouterMultiCandidateGeneratorAgent:
         artifacts: list[SvgArtifact] = []
         responses: list[OpenRouterResponse] = []
         for index in range(1, candidate_count + 1):
-            response = self.client.chat(
-                [
-                    {
-                        "role": "system",
-                        "content": (
-                            "You generate safe SVG icon candidates. Return only one SVG document. "
-                            "Do not include markdown, explanations, scripts, images, external assets, CSS, or animations."
-                        ),
-                    },
-                    {
-                        "role": "user",
-                        "content": _candidate_svg_prompt(plan, index, candidate_count),
-                    },
-                ],
-                reasoning=self.reasoning,
-                temperature=0.35,
-                max_tokens=self.max_tokens or DEFAULT_SVG_MAX_TOKENS,
-            )
-            artifacts.append(SvgArtifact(id=plan.id, stage=f"candidate-{index}", svg=_extract_svg(response.content)))
-            responses.append(response)
+            result = self.generate_one(plan, candidate_index=index, candidate_count=candidate_count)
+            artifacts.append(result.artifact)
+            responses.append(result.response)
         return LlmCandidateBatchResult(artifacts=tuple(artifacts), responses=tuple(responses))
+
+    def generate_one(self, plan: IconPlan, *, candidate_index: int, candidate_count: int) -> LlmSvgResult:
+        response = self.client.chat(
+            [
+                {
+                    "role": "system",
+                    "content": (
+                        "You generate safe SVG icon candidates. Return only one SVG document. "
+                        "Do not include markdown, explanations, scripts, images, external assets, CSS, or animations."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": _candidate_svg_prompt(plan, candidate_index, candidate_count),
+                },
+            ],
+            reasoning=self.reasoning,
+            temperature=0.35,
+            max_tokens=self.max_tokens or DEFAULT_SVG_MAX_TOKENS,
+        )
+        return LlmSvgResult(
+            artifact=SvgArtifact(id=plan.id, stage=f"candidate-{candidate_index}", svg=_extract_svg(response.content)),
+            response=response,
+        )
 
 
 class OpenRouterValidatorAgent:
@@ -392,6 +399,7 @@ class OpenRouterRefinerAgent:
         tool_report: ValidationReport,
         *,
         round_index: int,
+        collaboration_brief: str | None = None,
     ) -> LlmRefinementResult:
         response = self.client.chat(
             [
@@ -404,7 +412,14 @@ class OpenRouterRefinerAgent:
                 },
                 {
                     "role": "user",
-                    "content": _refinement_prompt(plan, artifact, validation_report, tool_report, round_index),
+                    "content": _refinement_prompt(
+                        plan,
+                        artifact,
+                        validation_report,
+                        tool_report,
+                        round_index,
+                        collaboration_brief=collaboration_brief,
+                    ),
                 },
             ],
             reasoning=self.reasoning,
@@ -640,7 +655,13 @@ def _refinement_prompt(
     validation_report: ValidationReport,
     tool_report: ValidationReport,
     round_index: int,
+    collaboration_brief: str | None = None,
 ) -> str:
+    selector_context = (
+        f"\nCollaborative selector repair brief:\n{collaboration_brief}\n"
+        if collaboration_brief
+        else ""
+    )
     return f"""Repair the SVG below and return only one complete SVG document.
 Hard requirements:
 - Canvas must be exactly <svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">.
@@ -654,6 +675,7 @@ Prompt: {plan.prompt}
 Motifs: {", ".join(plan.motifs)}
 Layout: {plan.layout}
 Refinement round: {round_index}
+{selector_context}
 
 LLM validator report JSON:
 {json.dumps(validation_report.to_json(), indent=2)}

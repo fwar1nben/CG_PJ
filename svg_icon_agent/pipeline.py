@@ -48,6 +48,7 @@ class PipelineRunResult:
     output_dir: Path
     prompts: list[PromptItem]
     plans: list[IconPlan]
+    candidate_artifacts: list[SvgArtifact]
     baseline_artifacts: list[SvgArtifact]
     refined_artifacts: list[SvgArtifact]
     baseline_reports: list[ValidationReport]
@@ -70,6 +71,8 @@ def run_single_prompt_pipeline(
     max_tokens: int | None = None,
     reasoning_effort: str | None = "none",
     reasoning_max_tokens: int | None = None,
+    workflow: str = "collaborative",
+    candidate_count: int = 3,
     client: OpenRouterClient | None = None,
     progress: ProgressLogger | None = None,
 ) -> PipelineRunResult:
@@ -83,6 +86,8 @@ def run_single_prompt_pipeline(
         max_tokens=max_tokens,
         reasoning_effort=reasoning_effort,
         reasoning_max_tokens=reasoning_max_tokens,
+        workflow=workflow,
+        candidate_count=candidate_count,
         client=client,
         progress=progress,
     )
@@ -99,13 +104,17 @@ def run_prompt_pipeline(
     max_tokens: int | None = None,
     reasoning_effort: str | None = "none",
     reasoning_max_tokens: int | None = None,
+    workflow: str = "collaborative",
+    candidate_count: int = 3,
     client: OpenRouterClient | None = None,
     progress: ProgressLogger | None = None,
 ) -> PipelineRunResult:
     logger = progress or ProgressLogger(verbose=False)
     reasoning = make_reasoning_config(reasoning_effort, reasoning_max_tokens)
+    candidate_dir = output_dir / "candidates"
     baseline_dir = output_dir / "baseline"
     refined_dir = output_dir / "refined"
+    candidate_dir.mkdir(parents=True, exist_ok=True)
     baseline_dir.mkdir(parents=True, exist_ok=True)
     refined_dir.mkdir(parents=True, exist_ok=True)
 
@@ -126,6 +135,8 @@ def run_prompt_pipeline(
             max_retries=max_retries,
             max_tokens=max_tokens,
             reasoning=reasoning,
+            workflow=workflow,
+            candidate_count=candidate_count,
             progress=logger,
         )
     except (OpenRouterError, ValueError) as exc:
@@ -135,6 +146,7 @@ def run_prompt_pipeline(
             output_dir=output_dir,
             prompts=prompts,
             plans=[],
+            candidate_artifacts=[],
             baseline_artifacts=[],
             refined_artifacts=[],
             baseline_reports=[],
@@ -147,7 +159,13 @@ def run_prompt_pipeline(
 
     plans = backend_result.plans
     artifacts = backend_result.artifacts
+    candidate_artifacts = backend_result.candidate_artifacts
     trace_by_id = {trace.id: trace for trace in backend_result.traces}
+
+    if candidate_artifacts:
+        logger.log(f"Writing {len(candidate_artifacts)} candidate SVG files.")
+    for artifact in candidate_artifacts:
+        (candidate_dir / f"{artifact.id}-{artifact.stage}.svg").write_text(artifact.svg, encoding="utf-8")
 
     logger.log(f"Writing {len(artifacts)} baseline SVG files.")
     for artifact in artifacts:
@@ -161,6 +179,7 @@ def run_prompt_pipeline(
             output_dir=output_dir,
             prompts=prompts,
             plans=plans,
+            candidate_artifacts=candidate_artifacts,
             baseline_artifacts=[],
             refined_artifacts=[],
             baseline_reports=[],
@@ -180,6 +199,7 @@ def run_prompt_pipeline(
         model=model,
         max_tokens=max_tokens,
         reasoning=reasoning,
+        collaboration_briefs=backend_result.selection_briefs,
         progress=logger,
     )
     _merge_refinement_traces(trace_by_id, refinements)
@@ -223,6 +243,7 @@ def run_prompt_pipeline(
         output_dir=output_dir,
         prompts=prompts,
         plans=plans,
+        candidate_artifacts=candidate_artifacts,
         baseline_artifacts=artifacts,
         refined_artifacts=refined_artifacts,
         baseline_reports=baseline_reports,
@@ -308,6 +329,12 @@ def _stage_from_message(message: str) -> str:
         return "planner"
     if "svg draft" in lowered or "baseline svg" in lowered:
         return "svg-generator"
+    if "candidate" in lowered:
+        return "candidate-generator"
+    if "critic" in lowered:
+        return "critic"
+    if "selector" in lowered:
+        return "selector"
     if "svg check" in lowered:
         return "svg-check"
     if "validator" in lowered or "validation" in lowered:

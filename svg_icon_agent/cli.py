@@ -29,6 +29,18 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--model", default=DEFAULT_OPENROUTER_MODEL, help="OpenRouter model id.")
     parser.add_argument(
+        "--workflow",
+        choices=["collaborative", "single"],
+        default="collaborative",
+        help="Agent workflow. Use single for ablation and faster smoke tests.",
+    )
+    parser.add_argument(
+        "--candidate-count",
+        type=int,
+        default=3,
+        help="Number of SVG candidates in collaborative workflow.",
+    )
+    parser.add_argument(
         "--request-timeout",
         type=float,
         default=60.0,
@@ -95,6 +107,8 @@ def main(argv: list[str] | None = None) -> int:
         max_tokens=args.max_tokens,
         reasoning_effort=args.reasoning_effort,
         reasoning_max_tokens=args.reasoning_max_tokens,
+        workflow=args.workflow,
+        candidate_count=args.candidate_count,
         progress=progress,
     )
     if result.status != "completed":
@@ -106,7 +120,7 @@ def main(argv: list[str] | None = None) -> int:
     refined_valid_count = sum(report.is_valid for report in result.refined_reports)
     print(
         f"Generated {len(result.baseline_artifacts)} baseline SVG icons in {baseline_dir}. "
-        f"Backend=openrouter. "
+        f"Backend=openrouter. Workflow={args.workflow}. "
         f"LLM validator accepted {valid_count}/{len(result.baseline_reports)} baseline and "
         f"{refined_valid_count}/{len(result.refined_reports)} refined icons. "
         f"Average score improved by {result.summary['average_score_delta']}."
