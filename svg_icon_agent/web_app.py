@@ -47,7 +47,7 @@ def create_app(
     run_async: bool = True,
 ) -> Flask:
     app = Flask(__name__)
-    root = Path(output_root)
+    root = Path(output_root).resolve()
     root.mkdir(parents=True, exist_ok=True)
     runs: dict[str, WebRun] = {}
     lock = threading.Lock()

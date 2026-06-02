@@ -397,6 +397,21 @@ class WebAppTests(unittest.TestCase):
             self.assertNotIn("secret-test-key", raw_text)
             self.assertNotIn("OPENROUTER_API_KEY", raw_text)
 
+    def test_web_outputs_route_serves_png_from_relative_output_root(self) -> None:
+        with tempfile.TemporaryDirectory(dir=".") as tmp:
+            root = Path(tmp) / "outputs" / "web"
+            target = root / "run-id" / "png" / "refined" / "icon.png"
+            target.parent.mkdir(parents=True)
+            render_svg_to_png(VALID_SVG, target)
+            app = create_app(output_root=root.relative_to(Path.cwd()), run_async=False)
+
+            response = app.test_client().get("/outputs/run-id/png/refined/icon.png")
+
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.content_type, "image/png")
+            self.assertEqual(response.data[:8], b"\x89PNG\r\n\x1a\n")
+            response.close()
+
 
 if __name__ == "__main__":
     unittest.main()
