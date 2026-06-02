@@ -25,6 +25,7 @@ from svg_icon_agent.openrouter_client import OpenRouterClient, OpenRouterError, 
 from svg_icon_agent.prompts import load_prompts, make_prompt_from_text
 from svg_icon_agent.refiner import refine_artifacts
 from svg_icon_agent.svg_check_tool import SvgCheckTool
+from svg_icon_agent.web_app import create_app
 
 
 PROMPT_PATH = Path("prompts/examples.json")
@@ -283,7 +284,7 @@ class CliTests(unittest.TestCase):
         )
         with tempfile.TemporaryDirectory() as tmp:
             output = Path(tmp)
-            with patch("svg_icon_agent.cli.create_openrouter_client", return_value=client):
+            with patch("svg_icon_agent.pipeline.create_openrouter_client", return_value=client):
                 exit_code = main(["--text", prompt, "--out", str(output), "--quiet"])
 
             self.assertEqual(exit_code, 0)
@@ -306,7 +307,7 @@ class CliTests(unittest.TestCase):
         )
         with tempfile.TemporaryDirectory() as tmp:
             output = Path(tmp)
-            with patch("svg_icon_agent.cli.create_openrouter_client", return_value=client):
+            with patch("svg_icon_agent.pipeline.create_openrouter_client", return_value=client):
                 with patch.dict(os.environ, {"OPENROUTER_API_KEY": "secret-test-key"}, clear=False):
                     exit_code = main(["--text", prompt, "--out", str(output), "--quiet"])
 
@@ -316,6 +317,82 @@ class CliTests(unittest.TestCase):
             self.assertNotIn("secret-test-key", trace_text)
             self.assertNotIn("secret-test-key", raw_text)
             self.assertNotIn("OPENROUTER_API_KEY", trace_text)
+
+
+class WebAppTests(unittest.TestCase):
+    def test_web_run_returns_artifacts_trace_and_raw_events(self) -> None:
+        prompt = "a minimal cloud download icon with a clear arrow"
+        item = make_prompt_from_text(prompt, source="web")
+        fake_client = FakeOpenRouterClient(
+            [
+                _plan_response(item),
+                _svg_response(VALID_SVG),
+                _validation_response(valid=True, score=100, issues=[]),
+            ]
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            app = create_app(
+                output_root=Path(tmp),
+                client_factory=lambda model, timeout, retries: fake_client,
+                run_async=False,
+            )
+            client = app.test_client()
+
+            response = client.post("/api/runs", json={"prompt": prompt})
+            data = response.get_json()
+
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(data["status"], "completed")
+            self.assertIn("baseline_svg_text", data["artifacts"])
+            self.assertIn("refined_png_url", data["artifacts"])
+            self.assertEqual(data["trace"][0]["planner_backend"], "openrouter")
+            self.assertEqual(data["trace"][0]["validator_backend"], "openrouter")
+            self.assertEqual([event["stage"] for event in data["raw_events"]], ["planner", "svg", "validator"])
+            self.assertTrue(any(event["stage"] == "validator" for event in data["events"]))
+
+    def test_web_planner_failure_does_not_generate_local_fallback(self) -> None:
+        fake_client = FakeOpenRouterClient([OpenRouterError("rate limited", debug_payload={"body": "try later"})])
+        with tempfile.TemporaryDirectory() as tmp:
+            app = create_app(
+                output_root=Path(tmp),
+                client_factory=lambda model, timeout, retries: fake_client,
+                run_async=False,
+            )
+            client = app.test_client()
+
+            response = client.post("/api/runs", json={"prompt": "a minimal rocket launch icon"})
+            data = response.get_json()
+
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(data["status"], "failed")
+            self.assertEqual(data["artifacts"], {})
+            self.assertEqual(data["trace"][0]["planner_backend"], "openrouter-error")
+            self.assertEqual(data["raw_events"][0]["debug_payload"]["body"], "try later")
+
+    def test_web_raw_response_does_not_leak_api_key(self) -> None:
+        prompt = "a minimal cloud download icon with a clear arrow"
+        item = make_prompt_from_text(prompt, source="web")
+        fake_client = FakeOpenRouterClient(
+            [
+                _plan_response(item),
+                _svg_response(VALID_SVG),
+                _validation_response(valid=True, score=100, issues=[]),
+            ]
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.dict(os.environ, {"OPENROUTER_API_KEY": "secret-test-key"}, clear=False):
+                app = create_app(
+                    output_root=Path(tmp),
+                    client_factory=lambda model, timeout, retries: fake_client,
+                    run_async=False,
+                )
+                response = app.test_client().post("/api/runs", json={"prompt": prompt})
+
+            data = response.get_json()
+            raw_text = json.dumps(data["raw_events"])
+            self.assertEqual(response.status_code, 200)
+            self.assertNotIn("secret-test-key", raw_text)
+            self.assertNotIn("OPENROUTER_API_KEY", raw_text)
 
 
 if __name__ == "__main__":

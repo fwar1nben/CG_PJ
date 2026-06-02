@@ -3,15 +3,12 @@
 from __future__ import annotations
 
 import argparse
-import json
 from pathlib import Path
 
-from svg_icon_agent.backends import BackendTrace, create_openrouter_client, generate_with_backend
-from svg_icon_agent.exporter import export_artifacts
-from svg_icon_agent.openrouter_client import DEFAULT_OPENROUTER_MODEL, OpenRouterError
+from svg_icon_agent.openrouter_client import DEFAULT_OPENROUTER_MODEL
+from svg_icon_agent.pipeline import run_prompt_pipeline
 from svg_icon_agent.progress import ProgressLogger
-from svg_icon_agent.prompts import PromptItem, load_prompts, make_prompt_from_text, split_case_ids
-from svg_icon_agent.refiner import RefinementResult, refine_artifacts
+from svg_icon_agent.prompts import load_prompts, make_prompt_from_text, split_case_ids
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -69,109 +66,29 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     output_dir = Path(args.out)
-    baseline_dir = output_dir / "baseline"
-    refined_dir = output_dir / "refined"
-    baseline_dir.mkdir(parents=True, exist_ok=True)
-    refined_dir.mkdir(parents=True, exist_ok=True)
-
     progress = ProgressLogger(verbose=not args.quiet)
-    progress.log(f"Loaded {len(prompts)} prompt(s).")
-
-    try:
-        client = create_openrouter_client(
-            model=args.model,
-            request_timeout=args.request_timeout,
-            max_retries=args.max_retries,
-        )
-        backend_result = generate_with_backend(
-            prompts,
-            backend=args.backend,
-            model=args.model,
-            llm_stage=args.llm_stage,
-            client=client,
-            request_timeout=args.request_timeout,
-            max_retries=args.max_retries,
-            progress=progress,
-        )
-    except (OpenRouterError, ValueError) as exc:
-        print(f"OpenRouter pipeline setup failed: {exc}")
-        return 1
-
-    plans = backend_result.plans
-    artifacts = backend_result.artifacts
-    trace_by_id = {trace.id: trace for trace in backend_result.traces}
-
-    progress.log(f"Writing {len(artifacts)} baseline SVG files.")
-    for artifact in artifacts:
-        (baseline_dir / f"{artifact.id}.svg").write_text(artifact.svg, encoding="utf-8")
-
-    if not artifacts:
-        _write_trace_outputs(output_dir, backend_result.traces, backend_result.raw_llm_events)
-        print("No SVG artifacts were generated. See llm_trace.json and llm_raw_responses.jsonl for details.")
-        return 1
-
-    progress.log("Running LLM validation/refinement loop.")
-    refinements = refine_artifacts(
-        plans,
-        artifacts,
-        client=client,
-        max_rounds=args.max_refine_rounds,
+    result = run_prompt_pipeline(
+        prompts,
+        output_dir=output_dir,
         model=args.model,
+        max_refine_rounds=args.max_refine_rounds,
+        request_timeout=args.request_timeout,
+        max_retries=args.max_retries,
         progress=progress,
     )
-    _merge_refinement_traces(trace_by_id, refinements)
+    if result.status != "completed":
+        print(f"{result.error or 'Pipeline failed.'} See llm_trace.json and llm_raw_responses.jsonl for details.")
+        return 1
 
-    refined_artifacts = [result.artifact for result in refinements]
-    baseline_reports = [result.baseline_report for result in refinements]
-    refined_reports = [result.refined_report for result in refinements]
-
-    progress.log(f"Writing {len(refined_artifacts)} refined SVG files.")
-    for artifact in refined_artifacts:
-        (refined_dir / f"{artifact.id}.svg").write_text(artifact.svg, encoding="utf-8")
-
-    raw_events = list(backend_result.raw_llm_events)
-    for result in refinements:
-        raw_events.extend(result.raw_llm_events)
-
-    progress.log("Writing JSON reports and LLM trace.")
-    (output_dir / "plans.json").write_text(
-        json.dumps([plan.to_json() for plan in plans], indent=2),
-        encoding="utf-8",
-    )
-    (output_dir / "baseline_validation.json").write_text(
-        json.dumps([report.to_json() for report in baseline_reports], indent=2),
-        encoding="utf-8",
-    )
-    (output_dir / "refined_validation.json").write_text(
-        json.dumps([report.to_json() for report in refined_reports], indent=2),
-        encoding="utf-8",
-    )
-    (output_dir / "refinement_history.json").write_text(
-        json.dumps([result.to_json() for result in refinements], indent=2),
-        encoding="utf-8",
-    )
-    _write_trace_outputs(output_dir, backend_result.traces, raw_events, baseline_reports, refined_reports)
-
-    progress.log("Exporting PNG previews and gallery.")
-    successful_prompts = [item for item in prompts if item.id in {artifact.id for artifact in refined_artifacts}]
-    summary = export_artifacts(
-        output_dir=output_dir,
-        prompts=successful_prompts,
-        baseline_artifacts=artifacts,
-        refined_artifacts=refined_artifacts,
-        baseline_reports=baseline_reports,
-        refined_reports=refined_reports,
-        refinements=refinements,
-    )
-    progress.log("Pipeline complete.")
-    valid_count = sum(report.is_valid for report in baseline_reports)
-    refined_valid_count = sum(report.is_valid for report in refined_reports)
+    baseline_dir = output_dir / "baseline"
+    valid_count = sum(report.is_valid for report in result.baseline_reports)
+    refined_valid_count = sum(report.is_valid for report in result.refined_reports)
     print(
-        f"Generated {len(artifacts)} baseline SVG icons in {baseline_dir}. "
-        f"Backend={backend_result.active_backend}. "
-        f"LLM validator accepted {valid_count}/{len(baseline_reports)} baseline and "
-        f"{refined_valid_count}/{len(refined_reports)} refined icons. "
-        f"Average score improved by {summary['average_score_delta']}."
+        f"Generated {len(result.baseline_artifacts)} baseline SVG icons in {baseline_dir}. "
+        f"Backend=openrouter. "
+        f"LLM validator accepted {valid_count}/{len(result.baseline_reports)} baseline and "
+        f"{refined_valid_count}/{len(result.refined_reports)} refined icons. "
+        f"Average score improved by {result.summary['average_score_delta']}."
     )
     return 0
 
@@ -194,44 +111,3 @@ def _print_prompt_cases(prompts: list[PromptItem]) -> None:
     for item in prompts:
         print(f"{item.id}\t{item.category}\t{item.prompt}")
 
-
-def _merge_refinement_traces(
-    trace_by_id: dict[str, BackendTrace],
-    refinements: list[RefinementResult],
-) -> None:
-    for result in refinements:
-        trace = trace_by_id.get(result.id)
-        if trace is None:
-            continue
-        trace.validator_backend = result.agent_statuses.get("validator", "not-run")
-        trace.refiner_backend = result.agent_statuses.get("refiner", "not-run")
-        trace.usage.update(result.usage)
-        trace.errors.extend(result.errors)
-
-
-def _write_trace_outputs(
-    output_dir: Path,
-    traces: list[BackendTrace],
-    raw_events: list[dict[str, object]],
-    baseline_reports: list[object] | None = None,
-    refined_reports: list[object] | None = None,
-) -> None:
-    baseline_by_id = {report.id: report for report in baseline_reports or []}
-    refined_by_id = {report.id: report for report in refined_reports or []}
-    (output_dir / "llm_trace.json").write_text(
-        json.dumps(
-            [
-                trace.to_json(
-                    baseline_report=baseline_by_id.get(trace.id),
-                    refined_report=refined_by_id.get(trace.id),
-                )
-                for trace in traces
-            ],
-            indent=2,
-        ),
-        encoding="utf-8",
-    )
-    (output_dir / "llm_raw_responses.jsonl").write_text(
-        "".join(json.dumps(event, ensure_ascii=False) + "\n" for event in raw_events),
-        encoding="utf-8",
-    )
