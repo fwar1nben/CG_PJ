@@ -53,6 +53,9 @@ planning, candidate SVG drafting, LLM critique, consensus selection, SVG
 optimization, validation, and LLM refinement when repairs are needed. The default
 workflow also rewrites the prompt before planning; the Web UI shows the rewritten
 prompt as soon as the Prompt Rewriter Agent finishes.
+After a Web run completes, enter new advice in `Optimizer feedback` and click
+`Apply feedback` to run a post-run Optimizer pass on the latest SVG, followed by
+the existing Validator/Refiner/export steps.
 The command prints realtime progress for each stage. If a model call fails, the
 error is logged; the system does not synthesize a local SVG fallback.
 

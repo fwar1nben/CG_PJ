@@ -19,6 +19,7 @@ Code link: TODO
 - OpenRouter SVG Quality Critic Agent: scores candidates for editability, safety, rendering risk, and local `SvgCheckTool` issues.
 - OpenRouter Consensus Selector Agent: chooses a winning candidate and writes a repair brief for the Refiner Agent.
 - OpenRouter SVG Optimizer Agent: improves the selected winner before validation using Critic reports, Selector risks and repair brief, `SvgCheckTool` output, and optional manual feedback.
+- Post-run manual optimization: after the first pipeline finishes in the Web UI, the user can add new improvement advice and trigger another SVG Optimizer pass on the latest generated SVG, followed by Validator/Refiner/export.
 - OpenRouter Validator Agent: asks the model to judge semantic alignment, visual quality, editability, and rule compliance, using local `SvgCheckTool` output as evidence.
 - OpenRouter Refiner Agent: asks the model to return a complete repaired SVG based on validator and tool feedback.
 - Local SvgCheckTool: checks parseability, canvas size, `viewBox`, unsafe tags, external references, accessible metadata, primitive count, and palette usage. It is a tool, not an Agent.
@@ -56,6 +57,7 @@ Code link: TODO
 - Adds multi-candidate generation with independent semantic and SVG-quality Critic Agents.
 - Uses a Consensus Selector Agent to make the final baseline choice explainable.
 - Adds an SVG Optimizer Agent that turns other agents' critiques, selector risks, deterministic tool checks, and optional human feedback into a revised SVG before validation.
+- Supports human-in-the-loop post-run optimization, so the demo can show iterative user feedback without rerunning planning and candidate generation.
 - Supports single-workflow ablation to compare direct generation against collaborative agent selection.
 - Makes failures inspectable through explicit validator issue codes and raw response logs.
 - Produces editable SVG artifacts, which are easier to revise than bitmap outputs.
@@ -66,7 +68,7 @@ Code link: TODO
 1. Problem: text-to-image models are overpowered for simple editable icons and are hard to control.
 2. Idea: convert icon generation into LLM prompt rewriting, planning, candidate drafting, independent critique, consensus selection, validation, and repair.
 3. System diagram: raw prompt to rewritten prompt to OpenRouter plan to 3 candidates to semantic/SVG-quality critics to selector to optimizer to refined SVG.
-4. Demo: use the Web UI to show original vs rewritten prompt, candidate drafts, selected winner, optimized baseline, manual optimizer feedback, trace, raw LLM responses, and final PNG.
+4. Demo: use the Web UI to show original vs rewritten prompt, candidate drafts, selected winner, optimized baseline, manual optimizer feedback, post-run feedback optimization, trace, raw LLM responses, and final PNG.
 5. Results: compare collaborative mode with `--workflow single`, showing validity, score improvements, selected candidates, and repair examples.
 6. Limitations: free API may be rate-limited; renderer supports a practical SVG subset.
 7. Future work: richer layout grammar, human preference evaluation, and more LLM-based repair strategies.

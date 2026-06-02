@@ -853,6 +853,49 @@ class WebAppTests(unittest.TestCase):
             self.assertFalse(data["trace"][0]["use_llm_optimizer_feedback"])
             self.assertEqual(data["trace"][0]["optimizer_feedback_sources"], ["svg_check_tool", "manual_feedback"])
 
+    def test_web_can_apply_manual_feedback_after_completed_run(self) -> None:
+        prompt = "a minimal cloud download icon with a clear arrow"
+        item = make_prompt_from_text(prompt, source="web")
+        post_svg = VALID_SVG.replace("Cloud Download", "Post Optimized Cloud Download")
+        fake_client = FakeOpenRouterClient(
+            _collaborative_success_responses(item)
+            + [
+                _optimizer_response(post_svg),
+                _validation_response(valid=True, score=98, issues=[]),
+            ]
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            app = create_app(
+                output_root=Path(tmp),
+                client_factory=lambda model, timeout, retries: fake_client,
+                run_async=False,
+            )
+            client = app.test_client()
+
+            initial = client.post(
+                "/api/runs",
+                json={"prompt": prompt, "workflow": "collaborative", "candidate_count": 3},
+            ).get_json()
+            response = client.post(
+                f"/api/runs/{initial['id']}/optimize",
+                json={
+                    "optimizer_feedback": "make the arrow larger and simplify the cloud",
+                    "use_llm_optimizer_feedback": False,
+                },
+            )
+            data = response.get_json()
+
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(data["status"], "completed")
+            self.assertIn("Post Optimized Cloud Download", data["artifacts"]["baseline_svg_text"])
+            self.assertIn("Post Optimized Cloud Download", data["artifacts"]["refined_svg_text"])
+            self.assertEqual(data["trace"][0]["post_run_optimizer_backend"], "openrouter")
+            self.assertTrue(data["trace"][0]["post_run_optimizer_applied"])
+            self.assertEqual(data["trace"][0]["post_run_optimizer_feedback"], "make the arrow larger and simplify the cloud")
+            self.assertFalse(data["trace"][0]["post_run_use_llm_feedback"])
+            self.assertEqual(data["trace"][0]["post_run_optimizer_feedback_sources"], ["svg_check_tool", "manual_feedback"])
+            self.assertTrue(any(event["stage"] == "post-run-optimizer" for event in data["raw_events"]))
+
     def test_web_returns_rewritten_prompt_before_run_finishes(self) -> None:
         prompt = "rocket"
         rewritten = (

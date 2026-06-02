@@ -13,9 +13,21 @@ from typing import Any, Callable
 
 from flask import Flask, Response, jsonify, request, send_from_directory, url_for
 
+from svg_icon_agent.backends import create_openrouter_client
+from svg_icon_agent.exporter import export_artifacts
+from svg_icon_agent.llm_agents import (
+    CandidateCritique,
+    LlmCritiqueResult,
+    LlmSelectionResult,
+    OpenRouterSvgOptimizerAgent,
+)
+from svg_icon_agent.models import IconPlan, SvgArtifact
 from svg_icon_agent.openrouter_client import DEFAULT_OPENROUTER_MODEL, OpenRouterClient
-from svg_icon_agent.pipeline import EventProgressLogger, run_single_prompt_pipeline
-from svg_icon_agent.prompts import make_prompt_from_text
+from svg_icon_agent.openrouter_client import OpenRouterError, OpenRouterResponse
+from svg_icon_agent.pipeline import EventProgressLogger, make_reasoning_config, run_single_prompt_pipeline
+from svg_icon_agent.prompts import PromptItem, make_prompt_from_text
+from svg_icon_agent.refiner import refine_artifacts
+from svg_icon_agent.svg_check_tool import SvgCheckTool
 
 RUN_ID_RE = re.compile(r"^[a-z0-9-]+$")
 ClientFactory = Callable[[str, float, int], OpenRouterClient]
@@ -151,6 +163,48 @@ def create_app(
             run.status = "completed" if (output_dir / "metrics.json").exists() else "failed"
         return jsonify(_run_payload(run))
 
+    @app.post("/api/runs/<run_id>/optimize")
+    def optimize_run(run_id: str) -> Response:
+        if not _valid_run_id(run_id):
+            return jsonify({"error": "Invalid run id."}), 404
+        payload = request.get_json(silent=True) or {}
+        feedback = _optional_text_value(payload.get("optimizer_feedback"))
+        if not feedback:
+            return jsonify({"error": "Optimizer feedback must contain at least one instruction."}), 400
+        use_llm_feedback = bool(payload.get("use_llm_optimizer_feedback", True))
+        with lock:
+            run = runs.get(run_id)
+        if run is None:
+            return jsonify({"error": "Run is not loaded in this Web session."}), 404
+        if run.status in {"queued", "running", "optimizing"}:
+            return jsonify({"error": "Run is still busy."}), 409
+        if not run.output_dir.exists():
+            return jsonify({"error": "Run output directory is missing."}), 404
+
+        run.status = "optimizing"
+        run.error = None
+        run.optimizer_feedback = feedback
+        run.use_llm_optimizer_feedback = use_llm_feedback
+        run.updated_at = time.time()
+        run.events.append(
+            {
+                "elapsed": 0.0,
+                "message": "Starting post-run manual SVG optimization.",
+                "stage": "optimizer",
+            }
+        )
+
+        if run_async:
+            thread = threading.Thread(
+                target=_execute_post_run_optimization,
+                args=(run, client_factory, feedback, use_llm_feedback),
+                daemon=True,
+            )
+            thread.start()
+        else:
+            _execute_post_run_optimization(run, client_factory, feedback, use_llm_feedback)
+        return jsonify(_run_payload(run))
+
     @app.get("/outputs/<run_id>/<path:filename>")
     def web_outputs(run_id: str, filename: str):
         if not _valid_run_id(run_id):
@@ -199,6 +253,188 @@ def _execute_run(run: WebRun, client_factory: ClientFactory | None) -> None:
         run.raw_events = result.raw_events
         run.summary = dict(result.summary)
     run.updated_at = time.time()
+
+
+def _execute_post_run_optimization(
+    run: WebRun,
+    client_factory: ClientFactory | None,
+    feedback: str,
+    use_llm_feedback: bool,
+) -> None:
+    logger = EventProgressLogger(verbose=False, events=run.events, prompt_rewrites=run.prompt_rewrites)
+    try:
+        client = _make_web_client(run, client_factory)
+        _post_run_optimize(
+            run,
+            feedback=feedback,
+            use_llm_feedback=use_llm_feedback,
+            client=client,
+            logger=logger,
+        )
+    except Exception as exc:  # pragma: no cover - defensive boundary for UI threads.
+        run.status = "failed"
+        run.error = str(exc)
+        run.events.append(
+            {
+                "elapsed": round(logger.elapsed_seconds(), 1),
+                "message": f"Post-run optimization failed: {exc}",
+                "stage": "error",
+            }
+        )
+    else:
+        run.status = "completed"
+        run.error = None
+        run.raw_events = _read_jsonl(run.output_dir / "llm_raw_responses.jsonl")
+        run.summary = _read_json(run.output_dir / "metrics.json") or {}
+    run.updated_at = time.time()
+
+
+def _post_run_optimize(
+    run: WebRun,
+    *,
+    feedback: str,
+    use_llm_feedback: bool,
+    client: OpenRouterClient,
+    logger: EventProgressLogger,
+) -> None:
+    plan = _load_run_plan(run.output_dir)
+    source_artifact = _load_post_run_source_artifact(run.output_dir, plan.id)
+    source_backup_dir = run.output_dir / "post_run_sources"
+    source_backup_dir.mkdir(parents=True, exist_ok=True)
+    source_backup = source_backup_dir / f"{plan.id}-{int(time.time())}.svg"
+    source_backup.write_text(source_artifact.svg, encoding="utf-8")
+
+    trace_rows = _read_json(run.output_dir / "llm_trace.json")
+    trace_item = trace_rows[0] if isinstance(trace_rows, list) and trace_rows and isinstance(trace_rows[0], dict) else {}
+    critiques = _critiques_from_trace(trace_item, run.model)
+    selection = _selection_from_trace(trace_item, run.model)
+    tool_report = SvgCheckTool().check(source_artifact)
+    reasoning = make_reasoning_config(run.reasoning_effort, run.reasoning_max_tokens)
+    optimizer = OpenRouterSvgOptimizerAgent(client, max_tokens=run.max_tokens, reasoning=reasoning)
+
+    raw_events = _read_jsonl(run.output_dir / "llm_raw_responses.jsonl")
+    logger.log(f"{plan.id}: requesting post-run SVG optimizer.")
+    try:
+        optimized = optimizer.optimize(
+            plan,
+            source_artifact,
+            critiques,
+            tool_report,
+            selection,
+            manual_feedback=feedback,
+            use_llm_feedback=use_llm_feedback,
+        )
+    except OpenRouterError as exc:
+        raw_events.append(
+            {
+                "id": plan.id,
+                "stage": "post-run-optimizer",
+                "status": "error",
+                "model": run.model,
+                "error": str(exc),
+                "debug_payload": exc.debug_payload,
+                "manual_feedback": feedback,
+                "use_llm_feedback": use_llm_feedback,
+            }
+        )
+        _write_jsonl(run.output_dir / "llm_raw_responses.jsonl", raw_events)
+        _update_post_run_trace(
+            run.output_dir,
+            optimizer_status="openrouter-error",
+            feedback=feedback,
+            use_llm_feedback=use_llm_feedback,
+            feedback_sources=[],
+            usage=None,
+            error=str(exc),
+        )
+        raise
+
+    raw_events.append(
+        {
+            "id": plan.id,
+            "stage": "post-run-optimizer",
+            "status": "success",
+            "model": run.model,
+            "response": optimized.response.raw,
+            "manual_feedback": feedback,
+            "use_llm_feedback": use_llm_feedback,
+            "feedback_sources": list(optimized.feedback_sources),
+        }
+    )
+    baseline_dir = run.output_dir / "baseline"
+    refined_dir = run.output_dir / "refined"
+    baseline_dir.mkdir(parents=True, exist_ok=True)
+    refined_dir.mkdir(parents=True, exist_ok=True)
+    (baseline_dir / f"{plan.id}.svg").write_text(optimized.artifact.svg, encoding="utf-8")
+
+    logger.log(f"{plan.id}: validating post-run optimized SVG.")
+    refinements = refine_artifacts(
+        [plan],
+        [optimized.artifact],
+        client=client,
+        max_rounds=run.max_refine_rounds,
+        model=run.model,
+        max_tokens=run.max_tokens,
+        reasoning=reasoning,
+        collaboration_briefs={plan.id: f"Post-run manual optimizer feedback: {feedback}"},
+        progress=logger,
+    )
+    refined_artifacts = [result.artifact for result in refinements]
+    baseline_reports = [result.baseline_report for result in refinements]
+    refined_reports = [result.refined_report for result in refinements]
+    for artifact in refined_artifacts:
+        (refined_dir / f"{artifact.id}.svg").write_text(artifact.svg, encoding="utf-8")
+    for result in refinements:
+        raw_events.extend(result.raw_llm_events)
+
+    _write_run_json_reports(run.output_dir, baseline_reports, refined_reports, refinements)
+    _write_jsonl(run.output_dir / "llm_raw_responses.jsonl", raw_events)
+    prompt_item = PromptItem(
+        id=plan.id,
+        category=plan.category,
+        prompt=plan.prompt,
+        style=plan.style,
+        palette=plan.palette,
+        source="web-post-run",
+    )
+    summary = export_artifacts(
+        output_dir=run.output_dir,
+        prompts=[prompt_item],
+        baseline_artifacts=[optimized.artifact],
+        refined_artifacts=refined_artifacts,
+        baseline_reports=baseline_reports,
+        refined_reports=refined_reports,
+        refinements=refinements,
+    )
+    run.summary = dict(summary)
+    refinement = refinements[0] if refinements else None
+    _update_post_run_trace(
+        run.output_dir,
+        optimizer_status="openrouter",
+        feedback=feedback,
+        use_llm_feedback=use_llm_feedback,
+        feedback_sources=list(optimized.feedback_sources),
+        usage=optimized.response.usage,
+        baseline_score=baseline_reports[0].score if baseline_reports else None,
+        baseline_valid=baseline_reports[0].is_valid if baseline_reports else None,
+        refined_score=refined_reports[0].score if refined_reports else None,
+        refined_valid=refined_reports[0].is_valid if refined_reports else None,
+        score_delta=refined_reports[0].score - baseline_reports[0].score if baseline_reports and refined_reports else None,
+        validator_backend=refinement.agent_statuses.get("validator") if refinement else None,
+        refiner_backend=refinement.agent_statuses.get("refiner") if refinement else None,
+    )
+    logger.log(f"{plan.id}: post-run manual optimization complete.")
+
+
+def _make_web_client(run: WebRun, client_factory: ClientFactory | None) -> OpenRouterClient:
+    if client_factory:
+        return client_factory(run.model, run.request_timeout, run.max_retries)
+    return create_openrouter_client(
+        model=run.model,
+        request_timeout=run.request_timeout,
+        max_retries=run.max_retries,
+        empty_response_retries=run.empty_response_retries,
+    )
 
 
 def _run_payload(run: WebRun, *, include_files: bool = True) -> dict[str, Any]:
@@ -292,6 +528,158 @@ def _artifact_payload(run: WebRun) -> dict[str, Any]:
     return artifacts
 
 
+def _load_run_plan(output_dir: Path) -> IconPlan:
+    data = _read_json(output_dir / "plans.json")
+    if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+        raise ValueError("Run does not contain a reusable icon plan.")
+    item = data[0]
+    return IconPlan(
+        id=str(item.get("id") or ""),
+        category=str(item.get("category") or "object"),
+        prompt=str(item.get("prompt") or ""),
+        style=str(item.get("style") or "mixed"),
+        palette=_tuple3(item.get("palette"), ("#2563eb", "#dbeafe", "#111827")),
+        motifs=tuple(str(value) for value in item.get("motifs") or ()),
+        layout=str(item.get("layout") or "post-run"),
+        constraints=tuple(str(value) for value in item.get("constraints") or ()),
+    )
+
+
+def _load_post_run_source_artifact(output_dir: Path, artifact_id: str) -> SvgArtifact:
+    for stage in ("refined", "baseline", "selected"):
+        path = output_dir / stage / f"{artifact_id}.svg"
+        if path.exists():
+            return SvgArtifact(id=artifact_id, stage="post-run-source", svg=path.read_text(encoding="utf-8"))
+    raise ValueError("Run does not contain an SVG artifact to optimize.")
+
+
+def _critiques_from_trace(trace_item: dict[str, Any], model: str) -> list[LlmCritiqueResult]:
+    reports = trace_item.get("critic_reports")
+    if not isinstance(reports, dict):
+        return []
+    results: list[LlmCritiqueResult] = []
+    for perspective, by_candidate in reports.items():
+        if not isinstance(by_candidate, dict):
+            continue
+        critiques: list[CandidateCritique] = []
+        for candidate_id, data in by_candidate.items():
+            if not isinstance(data, dict):
+                continue
+            critiques.append(
+                CandidateCritique(
+                    candidate_id=str(candidate_id),
+                    score=_int_value(data.get("score"), 0, minimum=0, maximum=100),
+                    strengths=_text_tuple(data.get("strengths")),
+                    issues=_text_tuple(data.get("issues")),
+                    recommendation=str(data.get("recommendation") or "No recommendation provided."),
+                )
+            )
+        if critiques:
+            results.append(
+                LlmCritiqueResult(
+                    perspective=str(perspective),
+                    critiques=tuple(critiques),
+                    response=OpenRouterResponse(content="{}", model=model),
+                )
+            )
+    return results
+
+
+def _selection_from_trace(trace_item: dict[str, Any], model: str) -> LlmSelectionResult:
+    winner = trace_item.get("selected_candidate_id")
+    rationale = trace_item.get("selector_rationale")
+    repair_brief = trace_item.get("selector_repair_brief")
+    risks = trace_item.get("selector_risks")
+    return LlmSelectionResult(
+        winner_candidate_id=str(winner or "post-run-source"),
+        rationale=str(rationale or "Post-run optimization starts from the latest generated SVG."),
+        risks=_text_tuple(risks),
+        repair_brief=str(repair_brief or "Apply the user's post-run feedback while preserving the icon intent."),
+        response=OpenRouterResponse(content="{}", model=model),
+    )
+
+
+def _write_run_json_reports(output_dir: Path, baseline_reports, refined_reports, refinements) -> None:
+    (output_dir / "baseline_validation.json").write_text(
+        json.dumps([report.to_json() for report in baseline_reports], indent=2),
+        encoding="utf-8",
+    )
+    (output_dir / "refined_validation.json").write_text(
+        json.dumps([report.to_json() for report in refined_reports], indent=2),
+        encoding="utf-8",
+    )
+    (output_dir / "refinement_history.json").write_text(
+        json.dumps([result.to_json() for result in refinements], indent=2),
+        encoding="utf-8",
+    )
+
+
+def _update_post_run_trace(
+    output_dir: Path,
+    *,
+    optimizer_status: str,
+    feedback: str,
+    use_llm_feedback: bool,
+    feedback_sources: list[str],
+    usage: dict[str, Any] | None,
+    error: str | None = None,
+    baseline_score: int | None = None,
+    baseline_valid: bool | None = None,
+    refined_score: int | None = None,
+    refined_valid: bool | None = None,
+    score_delta: int | None = None,
+    validator_backend: str | None = None,
+    refiner_backend: str | None = None,
+) -> None:
+    path = output_dir / "llm_trace.json"
+    rows = _read_json(path)
+    if not isinstance(rows, list) or not rows:
+        rows = [{"id": _first_svg_id(output_dir / "baseline") or "manual"}]
+    item = rows[0] if isinstance(rows[0], dict) else {}
+    count = _int_value(item.get("post_run_optimizer_count"), 0, minimum=0, maximum=999) + 1
+    item["post_run_optimizer_count"] = count
+    item["post_run_optimizer_backend"] = optimizer_status
+    item["post_run_optimizer_applied"] = optimizer_status == "openrouter"
+    item["post_run_optimizer_feedback"] = feedback
+    item["post_run_use_llm_feedback"] = use_llm_feedback
+    item["post_run_optimizer_feedback_sources"] = feedback_sources
+    if usage is not None:
+        usage_map = item.get("usage")
+        if not isinstance(usage_map, dict):
+            usage_map = {}
+        usage_map[f"post_run_optimizer_{count}"] = usage
+        item["usage"] = usage_map
+    if error:
+        errors = item.get("errors")
+        if not isinstance(errors, list):
+            errors = []
+        errors.append(f"post-run-optimizer: {error}")
+        item["errors"] = errors
+    if baseline_score is not None:
+        item["baseline_score"] = baseline_score
+    if baseline_valid is not None:
+        item["baseline_valid"] = baseline_valid
+    if refined_score is not None:
+        item["refined_score"] = refined_score
+    if refined_valid is not None:
+        item["refined_valid"] = refined_valid
+    if score_delta is not None:
+        item["score_delta"] = score_delta
+    if validator_backend:
+        item["validator_backend"] = validator_backend
+    if refiner_backend:
+        item["refiner_backend"] = refiner_backend
+    rows[0] = item
+    path.write_text(json.dumps(rows, indent=2), encoding="utf-8")
+
+
+def _write_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
+    path.write_text(
+        "".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows),
+        encoding="utf-8",
+    )
+
+
 def _first_svg_id(directory: Path) -> str | None:
     if not directory.exists():
         return None
@@ -360,6 +748,18 @@ def _optional_text_value(value: Any) -> str | None:
         return None
     cleaned = " ".join(value.strip().split())
     return cleaned or None
+
+
+def _tuple3(value: Any, fallback: tuple[str, str, str]) -> tuple[str, str, str]:
+    if isinstance(value, list) and len(value) == 3:
+        return (str(value[0]), str(value[1]), str(value[2]))
+    return fallback
+
+
+def _text_tuple(value: Any) -> tuple[str, ...]:
+    if not isinstance(value, list):
+        return ()
+    return tuple(str(item) for item in value if isinstance(item, str) and item.strip())
 
 
 def _reasoning_effort_value(value: Any) -> str | None:
@@ -454,6 +854,7 @@ _INDEX_HTML = """<!doctype html>
       line-height: 1.45;
     }
     .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .button-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
     button {
       height: 40px;
       border: 0;
@@ -752,7 +1153,10 @@ _INDEX_HTML = """<!doctype html>
           <input id="reasoningTokens" type="number" min="0" max="20000" placeholder="optional">
         </div>
       </div>
-      <button id="runButton" type="button">Run</button>
+      <div class="button-row">
+        <button id="runButton" type="button">Run</button>
+        <button id="optimizeButton" type="button" disabled>Apply feedback</button>
+      </div>
       <div id="status" class="status">Idle</div>
     </aside>
     <div class="workspace">
@@ -813,6 +1217,7 @@ _INDEX_HTML = """<!doctype html>
   <script>
     const state = { runId: null, timer: null, activeTab: 'timeline' };
     const runButton = document.getElementById('runButton');
+    const optimizeButton = document.getElementById('optimizeButton');
     const statusBox = document.getElementById('status');
     const runIdBox = document.getElementById('runId');
     const runStateBox = document.getElementById('runState');
@@ -862,6 +1267,40 @@ _INDEX_HTML = """<!doctype html>
       state.timer = setInterval(() => pollRun(), 1200);
     });
 
+    optimizeButton.addEventListener('click', async () => {
+      if (!state.runId) {
+        setStatus('Run an icon pipeline first.', 'bad');
+        return;
+      }
+      const feedback = document.getElementById('optimizerFeedback').value.trim();
+      if (!feedback) {
+        setStatus('Enter optimizer feedback first.', 'bad');
+        return;
+      }
+      const payload = {
+        optimizer_feedback: feedback,
+        use_llm_optimizer_feedback: document.getElementById('useLlmOptimizerFeedback').checked
+      };
+      runButton.disabled = true;
+      optimizeButton.disabled = true;
+      setStatus('Submitting post-run optimization...', '');
+      clearInterval(state.timer);
+      const response = await fetch(`/api/runs/${state.runId}/optimize`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        setStatus(data.error || 'Post-run optimization could not start.', 'bad');
+        runButton.disabled = false;
+        optimizeButton.disabled = false;
+        return;
+      }
+      renderRun(data);
+      state.timer = setInterval(() => pollRun(), 1200);
+    });
+
     async function pollRun() {
       if (!state.runId) return;
       const response = await fetch(`/api/runs/${state.runId}`);
@@ -885,10 +1324,12 @@ _INDEX_HTML = """<!doctype html>
       renderOptimizerContext(data);
       renderArtifacts(data.artifacts || {});
       renderCandidates((data.artifacts || {}).candidates || [], data.trace || []);
+      syncButtons(data);
     }
 
     function statusText(data) {
       if (data.status === 'completed') return 'Completed';
+      if (data.status === 'optimizing') return 'Optimizing from manual feedback';
       if (data.status === 'running') return 'Running';
       if (data.status === 'queued') return 'Queued';
       return 'Idle';
@@ -897,6 +1338,12 @@ _INDEX_HTML = """<!doctype html>
     function setStatus(text, cls) {
       statusBox.textContent = text;
       statusBox.className = `status ${cls || ''}`;
+    }
+
+    function syncButtons(data) {
+      const busy = ['queued', 'running', 'optimizing'].includes(data.status);
+      runButton.disabled = busy;
+      optimizeButton.disabled = busy || !data.id || !(data.artifacts && (data.artifacts.refined_svg_text || data.artifacts.baseline_svg_text));
     }
 
     function renderTimeline(events) {
@@ -942,12 +1389,17 @@ _INDEX_HTML = """<!doctype html>
 
     function renderOptimizerContext(data) {
       const traceItem = data.trace && data.trace[0] ? data.trace[0] : {};
-      const manual = traceItem.manual_optimizer_feedback || data.optimizer_feedback || 'none';
-      const useLlm = traceItem.use_llm_optimizer_feedback !== undefined
-        ? traceItem.use_llm_optimizer_feedback
-        : data.use_llm_optimizer_feedback;
-      const sources = Array.isArray(traceItem.optimizer_feedback_sources) && traceItem.optimizer_feedback_sources.length
-        ? traceItem.optimizer_feedback_sources.join(', ')
+      const manual = traceItem.post_run_optimizer_feedback || traceItem.manual_optimizer_feedback || data.optimizer_feedback || 'none';
+      const useLlm = traceItem.post_run_use_llm_feedback !== undefined
+        ? traceItem.post_run_use_llm_feedback
+        : traceItem.use_llm_optimizer_feedback !== undefined
+          ? traceItem.use_llm_optimizer_feedback
+          : data.use_llm_optimizer_feedback;
+      const traceSources = Array.isArray(traceItem.post_run_optimizer_feedback_sources) && traceItem.post_run_optimizer_feedback_sources.length
+        ? traceItem.post_run_optimizer_feedback_sources
+        : traceItem.optimizer_feedback_sources;
+      const sources = Array.isArray(traceSources) && traceSources.length
+        ? traceSources.join(', ')
         : 'waiting';
       document.getElementById('optimizerSummary').innerHTML = `
         <div><strong>Manual feedback:</strong> ${escapeHtml(manual)}</div>
