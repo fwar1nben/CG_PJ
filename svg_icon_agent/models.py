@@ -26,6 +26,26 @@ class IconPlan:
 
 
 @dataclass(frozen=True)
+class GenerationGoal:
+    objective: str
+    visual_requirements: tuple[str, ...]
+    constraints: tuple[str, ...]
+    acceptance_criteria: tuple[str, ...]
+    style_preferences: tuple[str, ...]
+    avoid_patterns: tuple[str, ...]
+
+    def to_json(self) -> dict[str, Any]:
+        return {
+            "objective": self.objective,
+            "visual_requirements": list(self.visual_requirements),
+            "constraints": list(self.constraints),
+            "acceptance_criteria": list(self.acceptance_criteria),
+            "style_preferences": list(self.style_preferences),
+            "avoid_patterns": list(self.avoid_patterns),
+        }
+
+
+@dataclass(frozen=True)
 class SvgArtifact:
     id: str
     stage: str

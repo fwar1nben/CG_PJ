@@ -31,6 +31,7 @@ from svg_icon_agent.llm_agents import (
 )
 from svg_icon_agent.openrouter_client import OpenRouterClient, OpenRouterConfig, OpenRouterError, OpenRouterResponse
 from svg_icon_agent.models import SvgArtifact
+from svg_icon_agent.memory import MemoryRetrievalTool, MemoryRecord
 from svg_icon_agent.pipeline import make_reasoning_config
 from svg_icon_agent.prompts import load_prompts, make_prompt_from_text
 from svg_icon_agent.refiner import refine_artifacts
@@ -265,6 +266,87 @@ class LocalToolTests(unittest.TestCase):
 
             self.assertTrue(output.exists())
             self.assertGreater(output.stat().st_size, 0)
+
+    def test_memory_retrieval_tool_indexes_and_retrieves_prior_runs(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "outputs"
+            rocket_run = root / "web" / "rocket-run"
+            coffee_run = root / "web" / "coffee-run"
+            rocket_run.mkdir(parents=True)
+            coffee_run.mkdir(parents=True)
+            (rocket_run / "plans.json").write_text(
+                json.dumps(
+                    [
+                        {
+                            "id": "rocket",
+                            "category": "object",
+                            "prompt": "a minimal rocket launch icon with a dynamic flame",
+                            "style": "mixed",
+                            "palette": ["#111111", "#222222", "#333333"],
+                            "motifs": ["rocket", "flame"],
+                            "layout": "centered",
+                            "constraints": ["simple"],
+                        }
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            (rocket_run / "llm_trace.json").write_text(
+                json.dumps(
+                    [
+                        {
+                            "selector_rationale": "clear upward rocket silhouette",
+                            "post_run_optimizer_feedback": "make the flame larger",
+                            "refined_score": 92,
+                        }
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            (coffee_run / "plans.json").write_text(
+                json.dumps(
+                    [
+                        {
+                            "id": "coffee",
+                            "category": "object",
+                            "prompt": "a simple coffee cup icon with steam",
+                            "style": "line",
+                            "palette": ["#111111", "#222222", "#333333"],
+                            "motifs": ["coffee", "steam"],
+                            "layout": "centered",
+                            "constraints": ["simple"],
+                        }
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            tool = MemoryRetrievalTool(root / "memory" / "memory_index.jsonl")
+            records = tool.rebuild_from_outputs(root)
+            context = tool.retrieve("rocket flame launch", top_k=1)
+
+            self.assertEqual(len(records), 2)
+            self.assertEqual(len(context.records), 1)
+            self.assertIn("rocket", context.records[0].record.prompt)
+            self.assertIn("make the flame larger", context.records[0].record.user_feedback)
+
+    def test_memory_retrieval_tool_appends_curated_record_without_duplicates(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            index = Path(tmp) / "memory_index.jsonl"
+            tool = MemoryRetrievalTool(index)
+            record = MemoryRecord(
+                id="mem-test",
+                source_path="run",
+                prompt="rocket icon",
+                summary="use a strong silhouette",
+                success_patterns=("large flame",),
+            )
+
+            tool.append_record(record)
+            tool.append_record(record)
+
+            self.assertEqual(len(tool.load_records()), 1)
+            self.assertIn("large flame", tool.retrieve("rocket flame", top_k=1).records[0].record.success_patterns)
 
 
 class OpenRouterAgentBoundaryTests(unittest.TestCase):
