@@ -30,6 +30,7 @@ class WebRun:
     max_refine_rounds: int
     request_timeout: float
     max_retries: int
+    empty_response_retries: int
     max_tokens: int | None
     reasoning_effort: str | None
     reasoning_max_tokens: int | None
@@ -71,6 +72,7 @@ def create_app(
         max_refine_rounds = _int_value(payload.get("max_refine_rounds"), 3, minimum=0, maximum=8)
         request_timeout = _float_value(payload.get("request_timeout"), 60.0, minimum=5.0, maximum=300.0)
         max_retries = _int_value(payload.get("max_retries"), 2, minimum=0, maximum=5)
+        empty_response_retries = _int_value(payload.get("empty_response_retries"), 3, minimum=0, maximum=10)
         max_tokens = _optional_int_value(payload.get("max_tokens"), minimum=256, maximum=20000)
         reasoning_effort = _reasoning_effort_value(payload.get("reasoning_effort"))
         reasoning_max_tokens = _optional_int_value(payload.get("reasoning_max_tokens"), minimum=0, maximum=20000)
@@ -85,6 +87,7 @@ def create_app(
             max_refine_rounds=max_refine_rounds,
             request_timeout=request_timeout,
             max_retries=max_retries,
+            empty_response_retries=empty_response_retries,
             max_tokens=max_tokens,
             reasoning_effort=reasoning_effort,
             reasoning_max_tokens=reasoning_max_tokens,
@@ -125,6 +128,7 @@ def create_app(
                 max_refine_rounds=0,
                 request_timeout=0,
                 max_retries=0,
+                empty_response_retries=3,
                 max_tokens=None,
                 reasoning_effort=None,
                 reasoning_max_tokens=None,
@@ -160,6 +164,7 @@ def _execute_run(run: WebRun, client_factory: ClientFactory | None) -> None:
             max_refine_rounds=run.max_refine_rounds,
             request_timeout=run.request_timeout,
             max_retries=run.max_retries,
+            empty_response_retries=run.empty_response_retries,
             max_tokens=run.max_tokens,
             reasoning_effort=run.reasoning_effort,
             reasoning_max_tokens=run.reasoning_max_tokens,
@@ -186,6 +191,7 @@ def _run_payload(run: WebRun, *, include_files: bool = True) -> dict[str, Any]:
         "prompt": run.prompt,
         "model": run.model,
         "max_tokens": run.max_tokens,
+        "empty_response_retries": run.empty_response_retries,
         "reasoning_effort": run.reasoning_effort,
         "reasoning_max_tokens": run.reasoning_max_tokens,
         "workflow": run.workflow,
@@ -626,6 +632,10 @@ _INDEX_HTML = """<!doctype html>
         </div>
       </div>
       <div>
+        <label for="emptyRetries">Empty retries</label>
+        <input id="emptyRetries" type="number" min="0" max="10" value="3">
+      </div>
+      <div>
         <label for="maxTokens">Max tokens</label>
         <input id="maxTokens" type="number" min="256" max="20000" value="4096">
       </div>
@@ -710,6 +720,7 @@ _INDEX_HTML = """<!doctype html>
         workflow: document.getElementById('workflow').value,
         candidate_count: Number(document.getElementById('candidateCount').value),
         request_timeout: Number(document.getElementById('timeout').value),
+        empty_response_retries: Number(document.getElementById('emptyRetries').value),
         max_tokens: Number(document.getElementById('maxTokens').value) || null,
         reasoning_effort: document.getElementById('reasoningEffort').value,
         reasoning_max_tokens: Number(document.getElementById('reasoningTokens').value) || null

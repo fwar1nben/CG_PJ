@@ -25,7 +25,7 @@ from svg_icon_agent.llm_agents import (
     OpenRouterSvgQualityCriticAgent,
     OpenRouterValidatorAgent,
 )
-from svg_icon_agent.openrouter_client import OpenRouterClient, OpenRouterError, OpenRouterResponse
+from svg_icon_agent.openrouter_client import OpenRouterClient, OpenRouterConfig, OpenRouterError, OpenRouterResponse
 from svg_icon_agent.pipeline import make_reasoning_config
 from svg_icon_agent.prompts import load_prompts, make_prompt_from_text
 from svg_icon_agent.refiner import refine_artifacts
@@ -60,6 +60,28 @@ class FakeOpenRouterClient:
         if isinstance(response, Exception):
             raise response
         return response
+
+
+class FakeHttpResponse:
+    def __init__(self, data, status_code=200):
+        self._data = data
+        self.status_code = status_code
+        self.text = json.dumps(data)
+
+    def json(self):
+        return self._data
+
+
+class FakeHttpSession:
+    def __init__(self, responses):
+        self.responses = list(responses)
+        self.calls = 0
+
+    def post(self, *args, **kwargs):
+        self.calls += 1
+        if not self.responses:
+            raise AssertionError("FakeHttpSession has no remaining responses.")
+        return self.responses.pop(0)
 
 
 def _plan_response(item):
@@ -232,6 +254,33 @@ class OpenRouterAgentBoundaryTests(unittest.TestCase):
 
 
 class OpenRouterPipelineTests(unittest.TestCase):
+    def test_openrouter_client_retries_empty_messages(self) -> None:
+        empty = {
+            "model": "test-model",
+            "choices": [{"message": {"content": None}, "finish_reason": "length"}],
+            "usage": {"completion_tokens_details": {"reasoning_tokens": 4096}},
+        }
+        valid = {
+            "model": "test-model",
+            "choices": [{"message": {"content": "  <svg></svg>  "}, "finish_reason": "stop"}],
+            "usage": {"completion_tokens": 4},
+        }
+        session = FakeHttpSession([FakeHttpResponse(empty), FakeHttpResponse(valid)])
+        client = OpenRouterClient(
+            OpenRouterConfig(
+                api_key="test-key",
+                model="test-model",
+                max_retries=0,
+                empty_response_retries=3,
+            ),
+            session=session,
+        )
+
+        response = client.chat([{"role": "user", "content": "make svg"}])
+
+        self.assertEqual(response.content, "<svg></svg>")
+        self.assertEqual(session.calls, 2)
+
     def test_openrouter_planner_json_converts_to_icon_plan(self) -> None:
         item = load_prompts(PROMPT_PATH)[0]
         client = FakeOpenRouterClient([_plan_response(item)])
@@ -483,6 +532,7 @@ class WebAppTests(unittest.TestCase):
                     "prompt": prompt,
                     "max_tokens": 4096,
                     "workflow": "single",
+                    "empty_response_retries": 4,
                     "reasoning_effort": "none",
                     "reasoning_max_tokens": 128,
                 },
@@ -492,6 +542,7 @@ class WebAppTests(unittest.TestCase):
             self.assertEqual(response.status_code, 200)
             self.assertEqual(data["status"], "completed")
             self.assertEqual(data["max_tokens"], 4096)
+            self.assertEqual(data["empty_response_retries"], 4)
             self.assertEqual(data["reasoning_effort"], "none")
             self.assertEqual(data["reasoning_max_tokens"], 128)
             self.assertIn("baseline_svg_text", data["artifacts"])

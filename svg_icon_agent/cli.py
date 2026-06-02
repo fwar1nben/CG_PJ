@@ -53,6 +53,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Retry count for retryable OpenRouter request failures.",
     )
     parser.add_argument(
+        "--empty-response-retries",
+        type=int,
+        default=3,
+        help="Retry count when OpenRouter returns an empty message/content=null.",
+    )
+    parser.add_argument(
         "--max-tokens",
         type=int,
         default=None,
@@ -104,6 +110,7 @@ def main(argv: list[str] | None = None) -> int:
         max_refine_rounds=args.max_refine_rounds,
         request_timeout=args.request_timeout,
         max_retries=args.max_retries,
+        empty_response_retries=args.empty_response_retries,
         max_tokens=args.max_tokens,
         reasoning_effort=args.reasoning_effort,
         reasoning_max_tokens=args.reasoning_max_tokens,

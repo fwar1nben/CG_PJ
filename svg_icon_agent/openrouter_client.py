@@ -14,6 +14,7 @@ DEFAULT_OPENROUTER_MODEL = "deepseek/deepseek-v4-flash"
 OPENROUTER_CHAT_URL = "https://openrouter.ai/api/v1/chat/completions"
 DEFAULT_TIMEOUT = 60.0
 DEFAULT_MAX_RETRIES = 2
+DEFAULT_EMPTY_RESPONSE_RETRIES = 3
 
 
 class OpenRouterError(RuntimeError):
@@ -31,6 +32,7 @@ class OpenRouterConfig:
     endpoint: str = OPENROUTER_CHAT_URL
     timeout: float = DEFAULT_TIMEOUT
     max_retries: int = DEFAULT_MAX_RETRIES
+    empty_response_retries: int = DEFAULT_EMPTY_RESPONSE_RETRIES
     app_title: str = "SVG Icon Agent"
     http_referer: str | None = None
 
@@ -41,6 +43,7 @@ class OpenRouterConfig:
         *,
         timeout: float | None = None,
         max_retries: int | None = None,
+        empty_response_retries: int | None = None,
     ) -> "OpenRouterConfig":
         api_key = os.environ.get("OPENROUTER_API_KEY", "").strip()
         if not api_key:
@@ -50,6 +53,11 @@ class OpenRouterConfig:
             model=model or os.environ.get("OPENROUTER_MODEL", DEFAULT_OPENROUTER_MODEL),
             timeout=timeout if timeout is not None else DEFAULT_TIMEOUT,
             max_retries=max_retries if max_retries is not None else DEFAULT_MAX_RETRIES,
+            empty_response_retries=(
+                empty_response_retries
+                if empty_response_retries is not None
+                else DEFAULT_EMPTY_RESPONSE_RETRIES
+            ),
             http_referer=os.environ.get("OPENROUTER_HTTP_REFERER") or None,
         )
 
@@ -100,7 +108,10 @@ class OpenRouterClient:
             payload["reasoning"] = reasoning
 
         last_error: Exception | None = None
-        for attempt in range(self.config.max_retries + 1):
+        total_attempts = self.config.max_retries + self.config.empty_response_retries + 1
+        empty_attempts = 0
+        retry_attempts = 0
+        for attempt in range(total_attempts):
             try:
                 response = self.session.post(
                     self.config.endpoint,
@@ -110,7 +121,8 @@ class OpenRouterClient:
                 )
             except requests.RequestException as exc:
                 last_error = exc
-                if attempt < self.config.max_retries:
+                if retry_attempts < self.config.max_retries:
+                    retry_attempts += 1
                     time.sleep(0.5 * (attempt + 1))
                     continue
                 raise OpenRouterError(
@@ -119,7 +131,8 @@ class OpenRouterClient:
                 ) from exc
 
             if response.status_code in {408, 409, 425, 429} or response.status_code >= 500:
-                if attempt < self.config.max_retries:
+                if retry_attempts < self.config.max_retries:
+                    retry_attempts += 1
                     time.sleep(0.5 * (attempt + 1))
                     continue
             if response.status_code >= 400:
@@ -142,10 +155,12 @@ class OpenRouterClient:
                     debug_payload=_sanitize_payload(data),
                 ) from exc
             if not isinstance(content, str) or not content.strip():
-                raise OpenRouterError(
-                    "OpenRouter returned an empty message.",
-                    debug_payload=_sanitize_payload(data),
-                )
+                last_error = OpenRouterError("OpenRouter returned an empty message.", debug_payload=_sanitize_payload(data))
+                if empty_attempts < self.config.empty_response_retries:
+                    empty_attempts += 1
+                    time.sleep(0.5 * empty_attempts)
+                    continue
+                raise last_error
 
             return OpenRouterResponse(
                 content=content.strip(),

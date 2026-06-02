@@ -28,6 +28,7 @@ export OPENROUTER_MODEL="openai/gpt-oss-120b:free"
   --backend openrouter \
   --request-timeout 30 \
   --max-retries 1 \
+  --empty-response-retries 3 \
   --max-tokens 4096 \
   --reasoning-effort none \
   --workflow collaborative \
@@ -111,6 +112,7 @@ rendering, and report export.
 - `--candidate-count`: number of SVG candidates in collaborative mode, default 3.
 - `--request-timeout`: per-request OpenRouter timeout in seconds.
 - `--max-retries`: retry count for retryable OpenRouter failures.
+- `--empty-response-retries`: retry count for empty model messages, default 3.
 - `--max-tokens`: optional `max_tokens` override for each OpenRouter Agent request.
 - `--reasoning-effort`: OpenRouter reasoning effort, default `none`.
 - `--reasoning-max-tokens`: optional reasoning token cap; takes precedence over effort.

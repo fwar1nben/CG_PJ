@@ -101,12 +101,14 @@ def create_openrouter_client(
     model: str | None = None,
     request_timeout: float | None = None,
     max_retries: int | None = None,
+    empty_response_retries: int | None = None,
 ) -> OpenRouterClient:
     return OpenRouterClient(
         OpenRouterConfig.from_env(
             model=model or DEFAULT_OPENROUTER_MODEL,
             timeout=request_timeout,
             max_retries=max_retries,
+            empty_response_retries=empty_response_retries,
         )
     )
 
@@ -120,6 +122,7 @@ def generate_with_backend(
     client: OpenRouterClient | None = None,
     request_timeout: float | None = None,
     max_retries: int | None = None,
+    empty_response_retries: int | None = None,
     max_tokens: int | None = None,
     reasoning: dict[str, Any] | None = None,
     workflow: str = "single",
@@ -141,11 +144,20 @@ def generate_with_backend(
         model=model_name,
         request_timeout=request_timeout,
         max_retries=max_retries,
+        empty_response_retries=empty_response_retries,
     )
 
     timeout = getattr(getattr(openrouter_client, "config", None), "timeout", request_timeout)
     retries = getattr(getattr(openrouter_client, "config", None), "max_retries", max_retries)
-    logger.log(f"Using OpenRouter backend for {len(prompts)} prompts (timeout={timeout}s, retries={retries}).")
+    empty_retries = getattr(
+        getattr(openrouter_client, "config", None),
+        "empty_response_retries",
+        empty_response_retries,
+    )
+    logger.log(
+        f"Using OpenRouter backend for {len(prompts)} prompts "
+        f"(timeout={timeout}s, retries={retries}, empty-response-retries={empty_retries})."
+    )
     return _openrouter_backend(
         prompts,
         requested_backend=backend,
