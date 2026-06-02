@@ -15,6 +15,8 @@ from svg_icon_agent.progress import ProgressLogger
 from svg_icon_agent.prompts import PromptItem
 from svg_icon_agent.refiner import RefinementResult, refine_artifacts
 
+REASONING_EFFORTS = {"none", "minimal", "low", "medium", "high", "xhigh"}
+
 
 @dataclass
 class EventProgressLogger(ProgressLogger):
@@ -66,6 +68,8 @@ def run_single_prompt_pipeline(
     request_timeout: float = 60.0,
     max_retries: int = 2,
     max_tokens: int | None = None,
+    reasoning_effort: str | None = "none",
+    reasoning_max_tokens: int | None = None,
     client: OpenRouterClient | None = None,
     progress: ProgressLogger | None = None,
 ) -> PipelineRunResult:
@@ -77,6 +81,8 @@ def run_single_prompt_pipeline(
         request_timeout=request_timeout,
         max_retries=max_retries,
         max_tokens=max_tokens,
+        reasoning_effort=reasoning_effort,
+        reasoning_max_tokens=reasoning_max_tokens,
         client=client,
         progress=progress,
     )
@@ -91,10 +97,13 @@ def run_prompt_pipeline(
     request_timeout: float = 60.0,
     max_retries: int = 2,
     max_tokens: int | None = None,
+    reasoning_effort: str | None = "none",
+    reasoning_max_tokens: int | None = None,
     client: OpenRouterClient | None = None,
     progress: ProgressLogger | None = None,
 ) -> PipelineRunResult:
     logger = progress or ProgressLogger(verbose=False)
+    reasoning = make_reasoning_config(reasoning_effort, reasoning_max_tokens)
     baseline_dir = output_dir / "baseline"
     refined_dir = output_dir / "refined"
     baseline_dir.mkdir(parents=True, exist_ok=True)
@@ -116,6 +125,7 @@ def run_prompt_pipeline(
             request_timeout=request_timeout,
             max_retries=max_retries,
             max_tokens=max_tokens,
+            reasoning=reasoning,
             progress=logger,
         )
     except (OpenRouterError, ValueError) as exc:
@@ -169,6 +179,7 @@ def run_prompt_pipeline(
         max_rounds=max_refine_rounds,
         model=model,
         max_tokens=max_tokens,
+        reasoning=reasoning,
         progress=logger,
     )
     _merge_refinement_traces(trace_by_id, refinements)
@@ -308,3 +319,23 @@ def _stage_from_message(message: str) -> str:
     if "error" in lowered or "failed" in lowered:
         return "error"
     return "pipeline"
+
+
+def make_reasoning_config(
+    reasoning_effort: str | None = "none",
+    reasoning_max_tokens: int | None = None,
+) -> dict[str, Any] | None:
+    if reasoning_max_tokens is not None:
+        return {
+            "max_tokens": max(0, reasoning_max_tokens),
+            "exclude": True,
+        }
+    effort = (reasoning_effort or "").strip().lower()
+    if not effort:
+        return None
+    if effort not in REASONING_EFFORTS:
+        raise ValueError(f"Unsupported reasoning effort: {reasoning_effort}")
+    return {
+        "effort": effort,
+        "exclude": True,
+    }

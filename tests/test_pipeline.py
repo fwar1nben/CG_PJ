@@ -22,6 +22,7 @@ from svg_icon_agent.llm_agents import (
     OpenRouterValidatorAgent,
 )
 from svg_icon_agent.openrouter_client import OpenRouterClient, OpenRouterError, OpenRouterResponse
+from svg_icon_agent.pipeline import make_reasoning_config
 from svg_icon_agent.prompts import load_prompts, make_prompt_from_text
 from svg_icon_agent.refiner import refine_artifacts
 from svg_icon_agent.svg_check_tool import SvgCheckTool
@@ -174,7 +175,11 @@ class OpenRouterPipelineTests(unittest.TestCase):
         item = load_prompts(PROMPT_PATH)[0]
         client = FakeOpenRouterClient([_plan_response(item)])
 
-        result = OpenRouterPlannerAgent(client, max_tokens=4096).plan(item)
+        result = OpenRouterPlannerAgent(
+            client,
+            max_tokens=4096,
+            reasoning=make_reasoning_config("none"),
+        ).plan(item)
 
         self.assertEqual(result.plan.id, item.id)
         self.assertEqual(result.plan.category, "ui")
@@ -183,6 +188,13 @@ class OpenRouterPipelineTests(unittest.TestCase):
         self.assertEqual(result.response.usage["completion_tokens"], 20)
         self.assertEqual(len(client.calls), 1)
         self.assertEqual(client.calls[0]["kwargs"]["max_tokens"], 4096)
+        self.assertEqual(client.calls[0]["kwargs"]["reasoning"], {"effort": "none", "exclude": True})
+
+    def test_reasoning_max_tokens_takes_precedence_over_effort(self) -> None:
+        self.assertEqual(
+            make_reasoning_config("high", reasoning_max_tokens=128),
+            {"max_tokens": 128, "exclude": True},
+        )
 
     def test_pipeline_calls_planner_generator_validator_and_refiner(self) -> None:
         item = load_prompts(PROMPT_PATH)[0]
@@ -339,12 +351,22 @@ class WebAppTests(unittest.TestCase):
             )
             client = app.test_client()
 
-            response = client.post("/api/runs", json={"prompt": prompt, "max_tokens": 4096})
+            response = client.post(
+                "/api/runs",
+                json={
+                    "prompt": prompt,
+                    "max_tokens": 4096,
+                    "reasoning_effort": "none",
+                    "reasoning_max_tokens": 128,
+                },
+            )
             data = response.get_json()
 
             self.assertEqual(response.status_code, 200)
             self.assertEqual(data["status"], "completed")
             self.assertEqual(data["max_tokens"], 4096)
+            self.assertEqual(data["reasoning_effort"], "none")
+            self.assertEqual(data["reasoning_max_tokens"], 128)
             self.assertIn("baseline_svg_text", data["artifacts"])
             self.assertIn("refined_png_url", data["artifacts"])
             self.assertEqual(data["trace"][0]["planner_backend"], "openrouter")
@@ -352,6 +374,7 @@ class WebAppTests(unittest.TestCase):
             self.assertEqual([event["stage"] for event in data["raw_events"]], ["planner", "svg", "validator"])
             self.assertTrue(any(event["stage"] == "validator" for event in data["events"]))
             self.assertTrue(all(call["kwargs"]["max_tokens"] == 4096 for call in fake_client.calls))
+            self.assertTrue(all(call["kwargs"]["reasoning"] == {"max_tokens": 128, "exclude": True} for call in fake_client.calls))
 
     def test_web_planner_failure_does_not_generate_local_fallback(self) -> None:
         fake_client = FakeOpenRouterClient([OpenRouterError("rate limited", debug_payload={"body": "try later"})])

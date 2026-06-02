@@ -47,6 +47,18 @@ def build_parser() -> argparse.ArgumentParser:
         help="Optional max_tokens override for each OpenRouter agent request.",
     )
     parser.add_argument(
+        "--reasoning-effort",
+        choices=["none", "minimal", "low", "medium", "high", "xhigh"],
+        default="none",
+        help="OpenRouter reasoning effort. Use none to reduce reasoning output.",
+    )
+    parser.add_argument(
+        "--reasoning-max-tokens",
+        type=int,
+        default=None,
+        help="Optional reasoning token cap. When set, it takes precedence over --reasoning-effort.",
+    )
+    parser.add_argument(
         "--llm-stage",
         choices=["plan-svg"],
         default="plan-svg",
@@ -81,6 +93,8 @@ def main(argv: list[str] | None = None) -> int:
         request_timeout=args.request_timeout,
         max_retries=args.max_retries,
         max_tokens=args.max_tokens,
+        reasoning_effort=args.reasoning_effort,
+        reasoning_max_tokens=args.reasoning_max_tokens,
         progress=progress,
     )
     if result.status != "completed":

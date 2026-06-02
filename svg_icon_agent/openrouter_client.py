@@ -84,6 +84,7 @@ class OpenRouterClient:
         messages: list[dict[str, str]],
         *,
         response_format: dict[str, Any] | None = None,
+        reasoning: dict[str, Any] | None = None,
         temperature: float = 0.2,
         max_tokens: int = 1400,
     ) -> OpenRouterResponse:
@@ -95,6 +96,8 @@ class OpenRouterClient:
         }
         if response_format is not None:
             payload["response_format"] = response_format
+        if reasoning is not None:
+            payload["reasoning"] = reasoning
 
         last_error: Exception | None = None
         for attempt in range(self.config.max_retries + 1):

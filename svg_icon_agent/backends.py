@@ -94,6 +94,7 @@ def generate_with_backend(
     request_timeout: float | None = None,
     max_retries: int | None = None,
     max_tokens: int | None = None,
+    reasoning: dict[str, Any] | None = None,
     progress: ProgressLogger | None = None,
 ) -> BackendResult:
     if backend != "openrouter":
@@ -119,6 +120,7 @@ def generate_with_backend(
         llm_stage=llm_stage,
         client=openrouter_client,
         max_tokens=max_tokens,
+        reasoning=reasoning,
         progress=logger,
     )
 
@@ -131,10 +133,11 @@ def _openrouter_backend(
     llm_stage: str,
     client: OpenRouterClient,
     max_tokens: int | None,
+    reasoning: dict[str, Any] | None,
     progress: ProgressLogger,
 ) -> BackendResult:
-    llm_planner = OpenRouterPlannerAgent(client, max_tokens=max_tokens)
-    llm_generator = OpenRouterSvgGeneratorAgent(client, max_tokens=max_tokens)
+    llm_planner = OpenRouterPlannerAgent(client, max_tokens=max_tokens, reasoning=reasoning)
+    llm_generator = OpenRouterSvgGeneratorAgent(client, max_tokens=max_tokens, reasoning=reasoning)
 
     plans: list[IconPlan] = []
     artifacts: list[SvgArtifact] = []

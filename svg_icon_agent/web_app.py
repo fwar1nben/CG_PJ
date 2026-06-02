@@ -31,6 +31,8 @@ class WebRun:
     request_timeout: float
     max_retries: int
     max_tokens: int | None
+    reasoning_effort: str | None
+    reasoning_max_tokens: int | None
     status: str = "queued"
     error: str | None = None
     created_at: float = field(default_factory=time.time)
@@ -68,6 +70,8 @@ def create_app(
         request_timeout = _float_value(payload.get("request_timeout"), 60.0, minimum=5.0, maximum=300.0)
         max_retries = _int_value(payload.get("max_retries"), 2, minimum=0, maximum=5)
         max_tokens = _optional_int_value(payload.get("max_tokens"), minimum=256, maximum=20000)
+        reasoning_effort = _reasoning_effort_value(payload.get("reasoning_effort"))
+        reasoning_max_tokens = _optional_int_value(payload.get("reasoning_max_tokens"), minimum=0, maximum=20000)
         run_id = f"{int(time.time())}-{uuid.uuid4().hex[:8]}"
         run = WebRun(
             id=run_id,
@@ -78,6 +82,8 @@ def create_app(
             request_timeout=request_timeout,
             max_retries=max_retries,
             max_tokens=max_tokens,
+            reasoning_effort=reasoning_effort,
+            reasoning_max_tokens=reasoning_max_tokens,
         )
         with lock:
             runs[run_id] = run
@@ -105,7 +111,18 @@ def create_app(
             output_dir = root / run_id
             if not output_dir.exists():
                 return jsonify({"error": "Run not found."}), 404
-            run = WebRun(id=run_id, prompt="", model="", output_dir=output_dir, max_refine_rounds=0, request_timeout=0, max_retries=0, max_tokens=None)
+            run = WebRun(
+                id=run_id,
+                prompt="",
+                model="",
+                output_dir=output_dir,
+                max_refine_rounds=0,
+                request_timeout=0,
+                max_retries=0,
+                max_tokens=None,
+                reasoning_effort=None,
+                reasoning_max_tokens=None,
+            )
             run.status = "completed" if (output_dir / "metrics.json").exists() else "failed"
         return jsonify(_run_payload(run))
 
@@ -136,6 +153,8 @@ def _execute_run(run: WebRun, client_factory: ClientFactory | None) -> None:
             request_timeout=run.request_timeout,
             max_retries=run.max_retries,
             max_tokens=run.max_tokens,
+            reasoning_effort=run.reasoning_effort,
+            reasoning_max_tokens=run.reasoning_max_tokens,
             client=client,
             progress=logger,
         )
@@ -157,6 +176,8 @@ def _run_payload(run: WebRun, *, include_files: bool = True) -> dict[str, Any]:
         "prompt": run.prompt,
         "model": run.model,
         "max_tokens": run.max_tokens,
+        "reasoning_effort": run.reasoning_effort,
+        "reasoning_max_tokens": run.reasoning_max_tokens,
         "status": run.status,
         "error": run.error,
         "created_at": run.created_at,
@@ -261,6 +282,15 @@ def _optional_int_value(value: Any, *, minimum: int, maximum: int) -> int | None
     return max(minimum, min(maximum, parsed))
 
 
+def _reasoning_effort_value(value: Any) -> str | None:
+    effort = str(value or "none").strip().lower()
+    if effort in {"", "default"}:
+        return None
+    if effort not in {"none", "minimal", "low", "medium", "high", "xhigh"}:
+        return "none"
+    return effort
+
+
 _INDEX_HTML = """<!doctype html>
 <html lang="en">
 <head>
@@ -318,7 +348,7 @@ _INDEX_HTML = """<!doctype html>
       font-size: 13px;
       font-weight: 600;
     }
-    textarea, input {
+    textarea, input, select {
       width: 100%;
       border: 1px solid var(--line);
       border-radius: 6px;
@@ -517,6 +547,23 @@ _INDEX_HTML = """<!doctype html>
         <label for="maxTokens">Max tokens</label>
         <input id="maxTokens" type="number" min="256" max="20000" value="4096">
       </div>
+      <div class="row">
+        <div>
+          <label for="reasoningEffort">Reasoning effort</label>
+          <select id="reasoningEffort">
+            <option value="none" selected>none</option>
+            <option value="minimal">minimal</option>
+            <option value="low">low</option>
+            <option value="medium">medium</option>
+            <option value="high">high</option>
+            <option value="xhigh">xhigh</option>
+          </select>
+        </div>
+        <div>
+          <label for="reasoningTokens">Reasoning tokens</label>
+          <input id="reasoningTokens" type="number" min="0" max="20000" placeholder="optional">
+        </div>
+      </div>
       <button id="runButton" type="button">Run</button>
       <div id="status" class="status">Idle</div>
     </aside>
@@ -575,7 +622,9 @@ _INDEX_HTML = """<!doctype html>
         model: document.getElementById('model').value,
         max_refine_rounds: Number(document.getElementById('rounds').value),
         request_timeout: Number(document.getElementById('timeout').value),
-        max_tokens: Number(document.getElementById('maxTokens').value) || null
+        max_tokens: Number(document.getElementById('maxTokens').value) || null,
+        reasoning_effort: document.getElementById('reasoningEffort').value,
+        reasoning_max_tokens: Number(document.getElementById('reasoningTokens').value) || null
       };
       runButton.disabled = true;
       setStatus('Submitting run...', '');

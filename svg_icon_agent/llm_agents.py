@@ -44,9 +44,15 @@ class LlmRefinementResult:
 class OpenRouterPlannerAgent:
     """Uses an OpenRouter model to produce an IconPlan-compatible JSON object."""
 
-    def __init__(self, client: OpenRouterClient, max_tokens: int | None = None) -> None:
+    def __init__(
+        self,
+        client: OpenRouterClient,
+        max_tokens: int | None = None,
+        reasoning: dict[str, Any] | None = None,
+    ) -> None:
         self.client = client
         self.max_tokens = max_tokens
+        self.reasoning = reasoning
 
     def plan(self, item: PromptItem) -> LlmPlanResult:
         response = self.client.chat(
@@ -64,6 +70,7 @@ class OpenRouterPlannerAgent:
                 },
             ],
             response_format={"type": "json_object"},
+            reasoning=self.reasoning,
             temperature=0.2,
             max_tokens=self.max_tokens or DEFAULT_PLANNER_MAX_TOKENS,
         )
@@ -74,9 +81,15 @@ class OpenRouterPlannerAgent:
 class OpenRouterSvgGeneratorAgent:
     """Uses an OpenRouter model to draft a safe, compact SVG icon."""
 
-    def __init__(self, client: OpenRouterClient, max_tokens: int | None = None) -> None:
+    def __init__(
+        self,
+        client: OpenRouterClient,
+        max_tokens: int | None = None,
+        reasoning: dict[str, Any] | None = None,
+    ) -> None:
         self.client = client
         self.max_tokens = max_tokens
+        self.reasoning = reasoning
 
     def generate(self, plan: IconPlan, stage: str = "baseline") -> LlmSvgResult:
         response = self.client.chat(
@@ -93,6 +106,7 @@ class OpenRouterSvgGeneratorAgent:
                     "content": _svg_prompt(plan),
                 },
             ],
+            reasoning=self.reasoning,
             temperature=0.25,
             max_tokens=self.max_tokens or DEFAULT_SVG_MAX_TOKENS,
         )
@@ -105,9 +119,15 @@ class OpenRouterSvgGeneratorAgent:
 class OpenRouterValidatorAgent:
     """Uses an OpenRouter model to judge SVG semantics, aesthetics, and rule fit."""
 
-    def __init__(self, client: OpenRouterClient, max_tokens: int | None = None) -> None:
+    def __init__(
+        self,
+        client: OpenRouterClient,
+        max_tokens: int | None = None,
+        reasoning: dict[str, Any] | None = None,
+    ) -> None:
         self.client = client
         self.max_tokens = max_tokens
+        self.reasoning = reasoning
 
     def validate(
         self,
@@ -133,6 +153,7 @@ class OpenRouterValidatorAgent:
                 },
             ],
             response_format={"type": "json_object"},
+            reasoning=self.reasoning,
             temperature=0.1,
             max_tokens=self.max_tokens or DEFAULT_VALIDATOR_MAX_TOKENS,
         )
@@ -146,9 +167,15 @@ class OpenRouterValidatorAgent:
 class OpenRouterRefinerAgent:
     """Uses an OpenRouter model to return a repaired complete SVG document."""
 
-    def __init__(self, client: OpenRouterClient, max_tokens: int | None = None) -> None:
+    def __init__(
+        self,
+        client: OpenRouterClient,
+        max_tokens: int | None = None,
+        reasoning: dict[str, Any] | None = None,
+    ) -> None:
         self.client = client
         self.max_tokens = max_tokens
+        self.reasoning = reasoning
 
     def refine(
         self,
@@ -173,6 +200,7 @@ class OpenRouterRefinerAgent:
                     "content": _refinement_prompt(plan, artifact, validation_report, tool_report, round_index),
                 },
             ],
+            reasoning=self.reasoning,
             temperature=0.2,
             max_tokens=self.max_tokens or DEFAULT_REFINER_MAX_TOKENS,
         )
