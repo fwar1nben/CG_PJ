@@ -1325,26 +1325,22 @@ _INDEX_HTML = """<!doctype html>
       gap: 8px;
     }
     .workflow-dag {
-      display: flex;
-      align-items: center;
-      gap: 0;
+      position: relative;
+      width: 1810px;
+      min-height: 390px;
       margin-bottom: 14px;
-      padding: 4px 2px 12px;
-      overflow-x: auto;
-      overscroll-behavior-x: contain;
     }
     .workflow-node {
       border: 1px solid var(--line);
       border-radius: 6px;
       padding: 8px 10px;
-      width: 140px;
-      min-width: 140px;
+      width: 132px;
       min-height: 62px;
       background: #fff;
       display: grid;
       align-content: center;
       gap: 4px;
-      position: relative;
+      position: absolute;
       z-index: 1;
     }
     .workflow-node strong {
@@ -1375,40 +1371,39 @@ _INDEX_HTML = """<!doctype html>
       color: var(--muted);
       opacity: 0.72;
     }
-    .workflow-edge {
-      width: 46px;
-      min-width: 46px;
-      height: 2px;
-      background: var(--line);
-      position: relative;
-    }
-    .workflow-edge::after {
-      content: "";
+    .workflow-edges {
       position: absolute;
-      right: -1px;
-      top: 50%;
-      width: 0;
-      height: 0;
-      border-top: 6px solid transparent;
-      border-bottom: 6px solid transparent;
-      border-left: 8px solid var(--line);
-      transform: translateY(-50%);
+      inset: 0;
+      width: 1810px;
+      height: 390px;
+      pointer-events: none;
     }
-    .workflow-edge.done,
-    .workflow-edge.active {
-      background: var(--accent);
+    .workflow-arrow {
+      fill: none;
+      stroke: var(--line);
+      stroke-width: 2;
     }
-    .workflow-edge.done::after,
-    .workflow-edge.active::after {
-      border-left-color: var(--accent);
+    .workflow-arrow.done,
+    .workflow-arrow.active {
+      stroke: var(--accent);
     }
-    .workflow-edge.error {
-      background: var(--bad);
+    .workflow-arrow.error {
+      stroke: var(--bad);
     }
-    .workflow-edge.error::after {
-      border-left-color: var(--bad);
+    .workflow-arrow.skipped {
+      opacity: 0.42;
     }
-    .workflow-edge.skipped {
+    .workflow-marker {
+      fill: var(--line);
+    }
+    .workflow-marker.done,
+    .workflow-marker.active {
+      fill: var(--accent);
+    }
+    .workflow-marker.error {
+      fill: var(--bad);
+    }
+    .workflow-marker.skipped {
       opacity: 0.42;
     }
     .event {
@@ -1761,21 +1756,105 @@ _INDEX_HTML = """<!doctype html>
     }
 
     function renderWorkflowGraph(workflow) {
-      const items = [];
-      workflow.forEach((node, index) => {
-        const status = node.status || 'waiting';
-        items.push(`
-          <div class="workflow-node ${escapeHtml(status)}" title="${escapeHtml(node.id || '')}">
-            <strong>${escapeHtml(node.label || node.id || 'Agent')}</strong>
-            <span>${escapeHtml(status)}</span>
-          </div>
-        `);
-        if (index < workflow.length - 1) {
-          const next = workflow[index + 1] || {};
-          items.push(`<div class="workflow-edge ${escapeHtml(edgeStatus(status, next.status || 'waiting'))}" aria-label="depends on"></div>`);
-        }
-      });
-      return `<div class="workflow-dag" aria-label="Directed Agent workflow graph">${items.join('')}</div>`;
+      const statusById = workflowStatusById(workflow);
+      const nodes = workflowGraphNodes(statusById);
+      const nodeById = Object.fromEntries(nodes.map((node) => [node.id, node]));
+      const edges = workflowGraphEdges();
+      const edgeLayer = renderWorkflowEdges(edges, nodeById);
+      const nodeLayer = nodes.map((node) => `
+        <div class="workflow-node ${escapeHtml(node.status)}"
+          style="left: ${node.x}px; top: ${node.y}px"
+          title="${escapeHtml(node.id)}">
+          <strong>${escapeHtml(node.label)}</strong>
+          <span>${escapeHtml(node.status)}</span>
+        </div>
+      `).join('');
+      return `<div class="workflow-dag" aria-label="Directed Agent dependency graph">${edgeLayer}${nodeLayer}</div>`;
+    }
+
+    function workflowStatusById(workflow) {
+      return Object.fromEntries(workflow.map((node) => [node.id, node.status || 'waiting']));
+    }
+
+    function workflowGraphNodes(statusById) {
+      return [
+        graphNode('memory', 'Memory', 20, 150, statusById.memory),
+        graphNode('goal-manager', 'Goal Manager', 180, 150, statusById['goal-manager']),
+        graphNode('prompt-rewriter', 'Prompt Rewriter', 340, 150, statusById['prompt-rewriter']),
+        graphNode('planner', 'Planner', 500, 150, statusById.planner),
+        graphNode('candidate-generator', 'Candidate Generators', 660, 150, statusById['svg-generator']),
+        graphNode('semantic-critic', 'Semantic Critic', 840, 70, statusById.critic),
+        graphNode('svg-quality-critic', 'SVG Quality Critic', 840, 230, statusById.critic),
+        graphNode('selector', 'Consensus Selector', 1020, 150, statusById.selector),
+        graphNode('optimizer', 'SVG Optimizer', 1180, 150, statusById.optimizer),
+        graphNode('validator', 'Validator', 1340, 150, statusById.validator),
+        graphNode('failure-taxonomy', 'Failure Taxonomy', 1500, 70, statusById['failure-taxonomy']),
+        graphNode('repair-router', 'Repair Router', 1660, 70, statusById['repair-router']),
+        graphNode('refiner', 'Refiner', 1660, 230, statusById.refiner),
+        graphNode('exporter', 'Exporter', 1500, 310, statusById.exporter),
+        graphNode('memory-curator', 'Memory Curator', 1660, 310, statusById['memory-curator'])
+      ];
+    }
+
+    function graphNode(id, label, x, y, status) {
+      return { id, label, x, y, status: status || 'waiting', width: 132, height: 62 };
+    }
+
+    function workflowGraphEdges() {
+      return [
+        ['memory', 'goal-manager'],
+        ['goal-manager', 'prompt-rewriter'],
+        ['prompt-rewriter', 'planner'],
+        ['planner', 'candidate-generator'],
+        ['candidate-generator', 'semantic-critic'],
+        ['candidate-generator', 'svg-quality-critic'],
+        ['semantic-critic', 'selector'],
+        ['svg-quality-critic', 'selector'],
+        ['selector', 'optimizer'],
+        ['optimizer', 'validator'],
+        ['validator', 'failure-taxonomy'],
+        ['failure-taxonomy', 'repair-router'],
+        ['repair-router', 'refiner'],
+        ['refiner', 'validator'],
+        ['validator', 'exporter'],
+        ['exporter', 'memory-curator']
+      ];
+    }
+
+    function renderWorkflowEdges(edges, nodeById) {
+      const markers = ['waiting', 'done', 'active', 'error', 'skipped'].map((status) => `
+        <marker id="arrow-${status}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" class="workflow-marker ${status}"></path>
+        </marker>
+      `).join('');
+      const paths = edges.map(([fromId, toId]) => {
+        const from = nodeById[fromId];
+        const to = nodeById[toId];
+        if (!from || !to) return '';
+        const status = edgeStatus(from.status, to.status);
+        return `<path class="workflow-arrow ${escapeHtml(status)}" marker-end="url(#arrow-${escapeHtml(status)})" d="${escapeHtml(edgePath(from, to))}"></path>`;
+      }).join('');
+      return `<svg class="workflow-edges" viewBox="0 0 1810 390" aria-hidden="true">
+        <defs>${markers}</defs>
+        ${paths}
+      </svg>`;
+    }
+
+    function edgePath(from, to) {
+      const fromRight = from.x + from.width;
+      const fromLeft = from.x;
+      const fromY = from.y + from.height / 2;
+      const toLeft = to.x;
+      const toRight = to.x + to.width;
+      const toY = to.y + to.height / 2;
+      if (from.x > to.x) {
+        const startX = fromLeft;
+        const endX = toRight;
+        const midY = Math.max(fromY, toY) + 54;
+        return `M ${startX} ${fromY} C ${startX - 80} ${midY}, ${endX + 80} ${midY}, ${endX} ${toY}`;
+      }
+      const midX = (fromRight + toLeft) / 2;
+      return `M ${fromRight} ${fromY} C ${midX} ${fromY}, ${midX} ${toY}, ${toLeft} ${toY}`;
     }
 
     function edgeStatus(currentStatus, nextStatus) {

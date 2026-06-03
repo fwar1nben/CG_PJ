@@ -1058,8 +1058,10 @@ class WebAppTests(unittest.TestCase):
         html = app.test_client().get("/").get_data(as_text=True)
 
         self.assertIn("workflow-dag", html)
-        self.assertIn("workflow-edge", html)
-        self.assertIn("Directed Agent workflow graph", html)
+        self.assertIn("workflow-arrow", html)
+        self.assertIn("Directed Agent dependency graph", html)
+        self.assertIn("semantic-critic", html)
+        self.assertIn("svg-quality-critic", html)
 
     def test_web_goal_and_memory_are_passed_to_llm_prompts(self) -> None:
         prompt = "a minimal cloud download icon with a clear arrow"
