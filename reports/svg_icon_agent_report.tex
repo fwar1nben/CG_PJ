@@ -7,13 +7,33 @@
 \usepackage{caption}
 \usepackage{subcaption}
 \usepackage{enumitem}
+\usepackage{float}
 \usepackage{hyperref}
 \usepackage{natbib}
 \usepackage{xcolor}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,calc}
 
 \newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
 \newcommand{\iconpreview}[2][0.88\linewidth]{\fcolorbox{black!35}{gray!8}{\includegraphics[width=#1]{#2}}}
 \setlength{\fboxsep}{3pt}
+\tikzset{
+  workflow node/.style={
+    draw,
+    rounded corners=2pt,
+    minimum width=1.36cm,
+    minimum height=0.68cm,
+    align=center,
+    font=\scriptsize,
+    inner sep=3pt
+  },
+  agent node/.style={workflow node, fill=blue!6, draw=blue!45},
+  tool node/.style={workflow node, fill=green!7, draw=green!45!black},
+  repair node/.style={workflow node, fill=orange!12, draw=orange!65!black},
+  workflow arrow/.style={-Latex, thick, draw=black!55},
+  repair arrow/.style={-Latex, thick, draw=orange!75!black},
+  success arrow/.style={-Latex, thick, draw=green!45!black}
+}
 
 \hypersetup{
   colorlinks=true,
@@ -62,16 +82,45 @@ The project is positioned between vector graphics generation and language-agent 
 
 The pipeline is deliberately divided into model-backed agents and deterministic local tools. Every named agent calls the configured LLM provider. Local code provides the substrate: prompt parsing, memory retrieval, SVG checking, rendering, metrics, and gallery export. This split keeps the graphics logic inspectable while still allowing the LLM to handle semantic reasoning, design tradeoffs, and repair planning.
 
-\begin{figure}[t]
+\begin{figure}[H]
 \centering
-\fbox{\begin{minipage}{0.95\linewidth}
-\centering
-\small
-Prompt $\rightarrow$ Memory Retrieval Tool $\rightarrow$ Goal Manager $\rightarrow$ Prompt Rewriter $\rightarrow$ Planner $\rightarrow$ Multi-Candidate Generator \\
-$\rightarrow$ Semantic Critic + SVG Quality Critic $\rightarrow$ Consensus Selector $\rightarrow$ SVG Optimizer $\rightarrow$ Validator \\
-$\rightarrow$ Failure Taxonomy $\rightarrow$ Repair Router $\rightarrow$ Refiner $\rightarrow$ Memory Curator $\rightarrow$ Exporter
-\end{minipage}}
-\caption{Agent architecture. Rectangular stages named as agents are LLM-backed. Memory retrieval, SVG checking, rendering, and export are deterministic local tools.}
+\resizebox{\linewidth}{!}{%
+\begin{tikzpicture}[x=1cm,y=1cm]
+  \node[tool node] (memory) at (0,0) {Memory\\Retrieval};
+  \node[agent node] (goal) at (1.55,0) {Goal\\Manager};
+  \node[agent node] (rewriter) at (3.1,0) {Prompt\\Rewriter};
+  \node[agent node] (planner) at (4.65,0) {Planner};
+  \node[agent node] (generator) at (6.25,0) {Candidate\\Generators};
+  \node[agent node] (semantic) at (8.0,1.1) {Semantic\\Critic};
+  \node[agent node] (quality) at (8.0,-1.1) {SVG Quality\\Critic};
+  \node[agent node] (selector) at (9.75,0) {Consensus\\Selector};
+  \node[agent node] (optimizer) at (11.3,0) {SVG\\Optimizer};
+  \node[agent node] (validator) at (12.85,0) {Validator};
+  \node[repair node] (taxonomy) at (14.45,1.2) {Failure\\Taxonomy};
+  \node[repair node] (router) at (16.05,1.2) {Repair\\Router};
+  \node[repair node] (refiner) at (16.05,-0.25) {Refiner};
+  \node[tool node] (exporter) at (14.45,-1.45) {Exporter};
+  \node[agent node] (curator) at (16.05,-1.45) {Memory\\Curator};
+
+  \draw[workflow arrow] (memory) -- (goal);
+  \draw[workflow arrow] (goal) -- (rewriter);
+  \draw[workflow arrow] (rewriter) -- (planner);
+  \draw[workflow arrow] (planner) -- (generator);
+  \draw[workflow arrow] (generator) -- (semantic);
+  \draw[workflow arrow] (generator) -- (quality);
+  \draw[workflow arrow] (semantic) -- (selector);
+  \draw[workflow arrow] (quality) -- (selector);
+  \draw[workflow arrow] (selector) -- (optimizer);
+  \draw[workflow arrow] (optimizer) -- (validator);
+  \draw[repair arrow] (validator) -- node[above,sloped,font=\tiny] {if invalid} (taxonomy);
+  \draw[repair arrow] (taxonomy) -- (router);
+  \draw[repair arrow] (router) -- (refiner);
+  \draw[repair arrow] (refiner.west) .. controls +(left:1.3cm) and +(down:1.1cm) .. (validator.south);
+  \draw[success arrow] (validator) -- node[below,sloped,font=\tiny] {if valid} (exporter);
+  \draw[success arrow] (exporter) -- (curator);
+\end{tikzpicture}%
+}
+\caption{Directed Agent dependency graph matching the Web UI workflow display. Blue nodes are LLM-backed agents, green nodes are deterministic tools or exporters, and orange nodes are the conditional repair route. During Web runs, the same graph is colored by runtime status such as waiting, active, done, skipped, or error.}
 \label{fig:pipeline}
 \end{figure}
 

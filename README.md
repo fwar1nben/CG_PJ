@@ -3,13 +3,16 @@
 SVG Icon Agent is a lightweight text-to-SVG project for Computer Graphics Project 3.
 It turns short English icon prompts into editable SVG icons through a fully
 LLM-backed multi-agent pipeline: goal management, planning, multi-candidate SVG
-drafting, semantic and SVG-quality critique, consensus selection, failure-aware
-repair routing, refinement, memory curation, and gallery export. A Goal Manager Agent first turns the prompt,
+drafting, semantic and SVG-quality critique, consensus selection, SVG
+optimization, validation, failure taxonomy, repair routing, refinement, memory
+curation, and gallery export. A Goal Manager Agent first turns the prompt,
 optional user goal, and retrieved historical memories into explicit generation
 criteria. A Prompt Rewriter Agent then optimizes the input description, and an
 SVG Optimizer Agent improves the selected draft from team feedback before
-validation. Local code is limited to prompt loading, historical memory retrieval,
-machine-checkable SVG safety checks, rendering, and reporting tools.
+validation. The Web UI renders the same dependency structure as a directed
+runtime-status graph, so each stage can be tracked as waiting, active, done,
+skipped, or error. Local code is limited to prompt loading, historical memory
+retrieval, machine-checkable SVG safety checks, rendering, and reporting tools.
 
 ## Quick start
 
@@ -51,6 +54,16 @@ Manual input is also supported:
 .venv/bin/python main.py --prompt prompts/examples.json --case-id object-rocket,object-coffee-cup --out outputs/selected
 ```
 
+Start the Web UI for interactive runs and live Agent status visualization:
+
+```bash
+export OPENROUTER_API_KEY="your-key"
+.venv/bin/python web.py --host 127.0.0.1 --port 7860 --out outputs/web
+```
+
+Then open `http://127.0.0.1:7860`. Web runs are written to timestamped
+directories under `outputs/web/`.
+
 OpenRouter free models can be slow or queued. The pipeline makes model calls for
 goal management, prompt rewriting, planning, candidate SVG drafting, LLM critique,
 consensus selection, SVG optimization, validation, failure taxonomy, repair
@@ -82,6 +95,43 @@ Useful output files:
 - `outputs/refinement_history.json`: per-icon repair logs.
 - `outputs/llm_trace.json`: model usage, stage status, errors, and score trace.
 - `outputs/llm_raw_responses.jsonl`: sanitized raw OpenRouter responses and error payloads.
+- `outputs/web/<run-id>/...`: per-run Web UI artifacts with the same file
+  structure plus live-event and post-run optimization traces.
+
+## Agent workflow
+
+The Web UI and report use the following directed Agent dependency graph. Blue
+boxes in the PDF report denote LLM-backed Agents, green boxes denote
+deterministic tools/export steps, and orange boxes denote the conditional repair
+route.
+
+```mermaid
+flowchart LR
+  memory[Memory Retrieval Tool] --> goal[Goal Manager Agent]
+  goal --> rewriter[Prompt Rewriter Agent]
+  rewriter --> planner[Planner Agent]
+  planner --> generator[Multi-Candidate Generator Agent]
+  generator --> semantic[Semantic Critic Agent]
+  generator --> quality[SVG Quality Critic Agent]
+  semantic --> selector[Consensus Selector Agent]
+  quality --> selector
+  selector --> optimizer[SVG Optimizer Agent]
+  optimizer --> validator[Validator Agent]
+  validator -- invalid --> taxonomy[Failure Taxonomy Agent]
+  taxonomy --> router[Repair Router Agent]
+  router --> refiner[Refiner Agent]
+  refiner --> validator
+  validator -- valid --> exporter[Exporter Tool]
+  exporter --> curator[Memory Curator Agent]
+```
+
+During a Web run, each graph node is assigned a runtime state:
+
+- `waiting`: the stage has not run yet.
+- `active`: the stage is currently running or is the latest event.
+- `done`: the stage completed through the configured LLM provider or local tool.
+- `skipped`: the stage is not needed, such as repair agents after a valid baseline.
+- `error`: the stage caused or received a failed run state.
 
 ## Pipeline
 
@@ -123,6 +173,29 @@ The default experiment uses collaborative mode with 3 candidates per prompt over
 `--workflow single` for a faster ablation baseline. The same pipeline also
 accepts selected cases, one manual prompt, or one interactive prompt for live
 demos.
+
+The report snapshot in `reports/svg_icon_agent_report.pdf` uses the completed
+Web runs in `outputs/web/`: 4 prompts, 12 generated candidates, 4 selected
+winners, 3/4 valid optimized baselines, 4/4 valid final refined icons, and an
+average validation-score improvement from 91.25 to 97.50.
+
+## Report
+
+The English PDF report is stored at:
+
+- `reports/svg_icon_agent_report.pdf`
+
+Its LaTeX source and bibliography are:
+
+- `reports/svg_icon_agent_report.tex`
+- `reports/references.bib`
+
+Rebuild the report with:
+
+```bash
+cd reports
+latexmk -pdf -interaction=nonstopmode -halt-on-error svg_icon_agent_report.tex
+```
 
 ## Project positioning
 
