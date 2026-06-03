@@ -426,7 +426,7 @@ class LocalToolTests(unittest.TestCase):
             self.assertIn("large flame", tool.retrieve("rocket flame", top_k=1).records[0].record.success_patterns)
 
 
-class OpenRouterAgentBoundaryTests(unittest.TestCase):
+class ProviderNeutralAgentBoundaryTests(unittest.TestCase):
     def test_only_openrouter_classes_are_named_agents(self) -> None:
         for path in Path("svg_icon_agent").glob("*.py"):
             text = path.read_text(encoding="utf-8")

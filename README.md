@@ -2,9 +2,9 @@
 
 SVG Icon Agent is a lightweight text-to-SVG project for Computer Graphics Project 3.
 It turns short English icon prompts into editable SVG icons through a fully
-LLM-backed multi-agent pipeline: OpenRouter planning, multi-candidate SVG
-drafting, semantic and SVG-quality critique, consensus selection, validation,
-refinement, and gallery export. A Goal Manager Agent first turns the prompt,
+LLM-backed multi-agent pipeline: goal management, planning, multi-candidate SVG
+drafting, semantic and SVG-quality critique, consensus selection, failure-aware
+repair routing, refinement, memory curation, and gallery export. A Goal Manager Agent first turns the prompt,
 optional user goal, and retrieved historical memories into explicit generation
 criteria. A Prompt Rewriter Agent then optimizes the input description, and an
 SVG Optimizer Agent improves the selected draft from team feedback before
@@ -53,10 +53,10 @@ Manual input is also supported:
 
 OpenRouter free models can be slow or queued. The pipeline makes model calls for
 goal management, prompt rewriting, planning, candidate SVG drafting, LLM critique,
-consensus selection, SVG optimization, validation, memory curation, and LLM
-refinement when repairs are needed. The default workflow retrieves similar local
-run memories and shows the generated goal, retrieved memories, and rewritten
-prompt in the Web UI.
+consensus selection, SVG optimization, validation, failure taxonomy, repair
+routing, memory curation, and LLM refinement when repairs are needed. The default
+workflow retrieves similar local run memories and shows the generated goal,
+retrieved memories, rewritten prompt, and live Agent workflow in the Web UI.
 After a Web run completes, enter new advice in `Optimizer feedback` and click
 `Apply feedback` to run a post-run Optimizer pass on the latest SVG, followed by
 the existing Validator/Refiner/export steps.
@@ -77,6 +77,8 @@ Useful output files:
 - `outputs/generation_goal.json`: structured goals from the Goal Manager Agent.
 - `outputs/memory_context.json`: retrieved historical memories used by the run.
 - `outputs/memory/memory_index.jsonl`: local reusable memory records.
+- `outputs/failure_taxonomy.json`: per-round failure categories and repair goals.
+- `outputs/repair_routes.json`: per-round repair routes and Refiner Agent briefs.
 - `outputs/refinement_history.json`: per-icon repair logs.
 - `outputs/llm_trace.json`: model usage, stage status, errors, and score trace.
 - `outputs/llm_raw_responses.jsonl`: sanitized raw OpenRouter responses and error payloads.
@@ -86,29 +88,33 @@ Useful output files:
 1. MemoryRetrievalTool retrieves similar local historical runs from
    `outputs/memory/memory_index.jsonl`. It is a tool, not an Agent.
 2. Goal Manager Agent creates structured generation goals and acceptance criteria.
-   This Agent calls OpenRouter.
+   This Agent calls the configured LLM provider.
 3. Prompt Rewriter Agent rewrites the user prompt into a concise SVG-icon prompt.
-   This Agent calls OpenRouter.
+   This Agent calls the configured LLM provider.
 4. Planner Agent extracts icon intent, palette, category, objects, and constraints.
-   This Agent calls OpenRouter.
+   This Agent calls the configured LLM provider.
 5. Multi-Candidate Generator Agent creates several different SVG drafts.
-   This Agent calls OpenRouter.
+   This Agent calls the configured LLM provider.
 6. Semantic Critic Agent judges prompt alignment and small-icon readability.
-   This Agent calls OpenRouter.
+   This Agent calls the configured LLM provider.
 7. SVG Quality Critic Agent judges editability, safety, and rendering risk using
-   local `SvgCheckTool` findings as evidence. This Agent calls OpenRouter.
+   local `SvgCheckTool` findings as evidence. This Agent calls the configured LLM provider.
 8. Consensus Selector Agent chooses the strongest candidate and writes a repair
-   brief for the next Agent. This Agent calls OpenRouter.
+   brief for the next Agent. This Agent calls the configured LLM provider.
 9. SVG Optimizer Agent rewrites the selected SVG using Critic, Selector,
-   `SvgCheckTool`, and optional manual feedback. This Agent calls OpenRouter.
+   `SvgCheckTool`, and optional manual feedback. This Agent calls the configured LLM provider.
 10. Validator Agent judges semantic alignment, visual quality, editability, and
-   rule compliance. This Agent calls OpenRouter and receives local `SvgCheckTool`
-   findings as evidence.
-11. Refiner Agent repairs validation issues by returning a complete revised SVG.
-   This Agent calls OpenRouter.
-12. Memory Curator Agent summarizes successful/failed lessons into the local
-   memory index. This Agent calls OpenRouter.
-13. Local tools render PNG previews, metrics, trace logs, and the gallery.
+   rule compliance. This Agent calls the configured LLM provider and receives
+   local `SvgCheckTool` findings as evidence.
+11. Failure Taxonomy Agent classifies blocking issues into repairable failure
+   types, root causes, evidence, priority, and repair goals.
+12. Repair Router Agent chooses a route such as safety rebuild, semantic
+   recomposition, simplification, layout rebalance, or minor patch.
+13. Refiner Agent repairs validation issues by returning a complete revised SVG
+   using the routed repair brief. This Agent calls the configured LLM provider.
+14. Memory Curator Agent summarizes successful/failed lessons into the local
+   memory index. This Agent calls the configured LLM provider.
+15. Local tools render PNG previews, metrics, trace logs, and the gallery.
 
 ## Current experiment
 
@@ -121,9 +127,10 @@ demos.
 ## Project positioning
 
 This project avoids training large image models. Its graphics component is editable
-SVG generation, while its agent component is a decomposed OpenRouter planning,
-goal management, retrieval-augmented prompt conditioning, candidate generation,
-critique, selection, validation, memory curation, and self-repair loop.
+SVG generation, while its agent component is a decomposed LLM-provider-backed
+goal management, retrieval-augmented prompt conditioning, planning, candidate
+generation, critique, selection, validation, failure taxonomy, repair routing,
+memory curation, and self-repair loop.
 Deterministic local code is only used as a toolchain for syntax/safety checks,
 rendering, and report export.
 
@@ -149,7 +156,7 @@ rendering, and report export.
 - `--request-timeout`: per-request OpenRouter timeout in seconds.
 - `--max-retries`: retry count for retryable OpenRouter failures.
 - `--empty-response-retries`: retry count for empty model messages, default 3.
-- `--max-tokens`: optional `max_tokens` override for each OpenRouter Agent request.
+- `--max-tokens`: optional `max_tokens` override for each LLM Agent request.
 - `--reasoning-effort`: OpenRouter reasoning effort, default `none`.
 - `--reasoning-max-tokens`: optional reasoning token cap; takes precedence over effort.
 - `--llm-stage plan-svg`: the LLM performs both planning and SVG drafting.
