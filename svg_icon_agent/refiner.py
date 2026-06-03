@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from svg_icon_agent.llm_agents import OpenRouterRefinerAgent, OpenRouterValidatorAgent
+from svg_icon_agent.llm_agents import RefinerAgent, ValidatorAgent
 from svg_icon_agent.models import IconPlan, SvgArtifact, ValidationIssue, ValidationReport
 from svg_icon_agent.openrouter_client import DEFAULT_OPENROUTER_MODEL, OpenRouterClient, OpenRouterError
 from svg_icon_agent.progress import ProgressLogger
@@ -74,8 +74,8 @@ def refine_artifacts(
 
     logger = progress or ProgressLogger(verbose=False)
     checker = SvgCheckTool()
-    llm_validator = OpenRouterValidatorAgent(client, max_tokens=max_tokens, reasoning=reasoning)
-    llm_refiner = OpenRouterRefinerAgent(client, max_tokens=max_tokens, reasoning=reasoning)
+    llm_validator = ValidatorAgent(client, max_tokens=max_tokens, reasoning=reasoning)
+    llm_refiner = RefinerAgent(client, max_tokens=max_tokens, reasoning=reasoning)
     results: list[RefinementResult] = []
 
     total = len(artifacts)
@@ -105,8 +105,8 @@ def _refine_one(
     artifact: SvgArtifact,
     *,
     checker: SvgCheckTool,
-    llm_validator: OpenRouterValidatorAgent,
-    llm_refiner: OpenRouterRefinerAgent,
+    llm_validator: ValidatorAgent,
+    llm_refiner: RefinerAgent,
     max_rounds: int,
     model: str,
     collaboration_brief: str | None,

@@ -7,15 +7,15 @@ from typing import Any
 
 from svg_icon_agent.llm_agents import (
     LlmCritiqueResult,
-    OpenRouterConsensusSelectorAgent,
-    OpenRouterGoalManagerAgent,
-    OpenRouterMultiCandidateGeneratorAgent,
-    OpenRouterPlannerAgent,
-    OpenRouterPromptRewriterAgent,
-    OpenRouterSemanticCriticAgent,
-    OpenRouterSvgGeneratorAgent,
-    OpenRouterSvgOptimizerAgent,
-    OpenRouterSvgQualityCriticAgent,
+    ConsensusSelectorAgent,
+    GoalManagerAgent,
+    MultiCandidateGeneratorAgent,
+    PlannerAgent,
+    PromptRewriterAgent,
+    SemanticCriticAgent,
+    SvgGeneratorAgent,
+    SvgOptimizerAgent,
+    SvgQualityCriticAgent,
 )
 from svg_icon_agent.memory import MemoryContext
 from svg_icon_agent.models import GenerationGoal, IconPlan, SvgArtifact, ValidationReport
@@ -238,15 +238,15 @@ def _openrouter_backend(
     use_llm_optimizer_feedback: bool,
     progress: ProgressLogger,
 ) -> BackendResult:
-    goal_manager = OpenRouterGoalManagerAgent(client, max_tokens=max_tokens, reasoning=reasoning)
-    prompt_rewriter = OpenRouterPromptRewriterAgent(client, max_tokens=max_tokens, reasoning=reasoning)
-    llm_planner = OpenRouterPlannerAgent(client, max_tokens=max_tokens, reasoning=reasoning)
-    llm_generator = OpenRouterSvgGeneratorAgent(client, max_tokens=max_tokens, reasoning=reasoning)
-    candidate_generator = OpenRouterMultiCandidateGeneratorAgent(client, max_tokens=max_tokens, reasoning=reasoning)
-    semantic_critic = OpenRouterSemanticCriticAgent(client, max_tokens=max_tokens, reasoning=reasoning)
-    quality_critic = OpenRouterSvgQualityCriticAgent(client, max_tokens=max_tokens, reasoning=reasoning)
-    selector = OpenRouterConsensusSelectorAgent(client, max_tokens=max_tokens, reasoning=reasoning)
-    optimizer = OpenRouterSvgOptimizerAgent(client, max_tokens=max_tokens, reasoning=reasoning)
+    goal_manager = GoalManagerAgent(client, max_tokens=max_tokens, reasoning=reasoning)
+    prompt_rewriter = PromptRewriterAgent(client, max_tokens=max_tokens, reasoning=reasoning)
+    llm_planner = PlannerAgent(client, max_tokens=max_tokens, reasoning=reasoning)
+    llm_generator = SvgGeneratorAgent(client, max_tokens=max_tokens, reasoning=reasoning)
+    candidate_generator = MultiCandidateGeneratorAgent(client, max_tokens=max_tokens, reasoning=reasoning)
+    semantic_critic = SemanticCriticAgent(client, max_tokens=max_tokens, reasoning=reasoning)
+    quality_critic = SvgQualityCriticAgent(client, max_tokens=max_tokens, reasoning=reasoning)
+    selector = ConsensusSelectorAgent(client, max_tokens=max_tokens, reasoning=reasoning)
+    optimizer = SvgOptimizerAgent(client, max_tokens=max_tokens, reasoning=reasoning)
     checker = SvgCheckTool()
 
     goals: dict[str, GenerationGoal] = {}
@@ -408,11 +408,11 @@ def _collaborative_svg_draft(
     total: int,
     candidate_count: int,
     model: str,
-    candidate_generator: OpenRouterMultiCandidateGeneratorAgent,
-    semantic_critic: OpenRouterSemanticCriticAgent,
-    quality_critic: OpenRouterSvgQualityCriticAgent,
-    selector: OpenRouterConsensusSelectorAgent,
-    optimizer: OpenRouterSvgOptimizerAgent,
+    candidate_generator: MultiCandidateGeneratorAgent,
+    semantic_critic: SemanticCriticAgent,
+    quality_critic: SvgQualityCriticAgent,
+    selector: ConsensusSelectorAgent,
+    optimizer: SvgOptimizerAgent,
     checker: SvgCheckTool,
     trace: BackendTrace,
     raw_events: list[dict[str, Any]],

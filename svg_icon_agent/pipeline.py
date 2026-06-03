@@ -9,7 +9,7 @@ from typing import Any
 
 from svg_icon_agent.backends import BackendTrace, OpenRouterClient, create_openrouter_client, generate_with_backend
 from svg_icon_agent.exporter import export_artifacts
-from svg_icon_agent.llm_agents import OpenRouterMemoryCuratorAgent
+from svg_icon_agent.llm_agents import MemoryCuratorAgent
 from svg_icon_agent.memory import MemoryContext, MemoryRetrievalTool, record_from_curated_json
 from svg_icon_agent.models import GenerationGoal, IconPlan, SvgArtifact, ValidationReport
 from svg_icon_agent.openrouter_client import DEFAULT_OPENROUTER_MODEL, OpenRouterError
@@ -524,7 +524,7 @@ def _curate_memories(
     by_prompt = {item.id: item for item in prompts}
     by_plan = {plan.id: plan for plan in plans}
     raw_events: list[dict[str, Any]] = []
-    curator = OpenRouterMemoryCuratorAgent(client, max_tokens=max_tokens, reasoning=reasoning)
+    curator = MemoryCuratorAgent(client, max_tokens=max_tokens, reasoning=reasoning)
     for trace in traces:
         item = by_prompt.get(trace.id)
         plan = by_plan.get(trace.id)

@@ -120,7 +120,7 @@ class LlmSelectionResult:
         }
 
 
-class OpenRouterPromptRewriterAgent:
+class PromptRewriterAgent:
     """Uses an OpenRouter model to rewrite a user prompt for SVG icon generation."""
 
     def __init__(
@@ -172,7 +172,7 @@ class OpenRouterPromptRewriterAgent:
         return LlmRewriteResult(item=rewritten_item, rewritten_prompt=rewritten, response=response)
 
 
-class OpenRouterGoalManagerAgent:
+class GoalManagerAgent:
     """Uses an OpenRouter model to turn prompt, manual goal, and memories into a generation goal."""
 
     def __init__(
@@ -218,7 +218,7 @@ class OpenRouterGoalManagerAgent:
         )
 
 
-class OpenRouterPlannerAgent:
+class PlannerAgent:
     """Uses an OpenRouter model to produce an IconPlan-compatible JSON object."""
 
     def __init__(
@@ -261,7 +261,7 @@ class OpenRouterPlannerAgent:
         return LlmPlanResult(plan=_coerce_plan(item, data), response=response)
 
 
-class OpenRouterSvgGeneratorAgent:
+class SvgGeneratorAgent:
     """Uses an OpenRouter model to draft a safe, compact SVG icon."""
 
     def __init__(
@@ -306,7 +306,7 @@ class OpenRouterSvgGeneratorAgent:
         )
 
 
-class OpenRouterMultiCandidateGeneratorAgent:
+class MultiCandidateGeneratorAgent:
     """Uses an OpenRouter model to draft several deliberately different SVG candidates."""
 
     def __init__(
@@ -367,7 +367,7 @@ class OpenRouterMultiCandidateGeneratorAgent:
         )
 
 
-class OpenRouterValidatorAgent:
+class ValidatorAgent:
     """Uses an OpenRouter model to judge SVG semantics, aesthetics, and rule fit."""
 
     def __init__(
@@ -415,7 +415,7 @@ class OpenRouterValidatorAgent:
         )
 
 
-class OpenRouterSemanticCriticAgent:
+class SemanticCriticAgent:
     """Uses an OpenRouter model to judge prompt alignment and small-icon readability."""
 
     def __init__(
@@ -452,7 +452,7 @@ class OpenRouterSemanticCriticAgent:
         )
 
 
-class OpenRouterSvgQualityCriticAgent:
+class SvgQualityCriticAgent:
     """Uses an OpenRouter model to judge SVG editability, safety, and rendering risk."""
 
     def __init__(
@@ -494,7 +494,7 @@ class OpenRouterSvgQualityCriticAgent:
         )
 
 
-class OpenRouterConsensusSelectorAgent:
+class ConsensusSelectorAgent:
     """Uses an OpenRouter model to choose the best candidate from critic reports."""
 
     def __init__(
@@ -534,7 +534,7 @@ class OpenRouterConsensusSelectorAgent:
         return _coerce_selection(data, candidates, response)
 
 
-class OpenRouterSvgOptimizerAgent:
+class SvgOptimizerAgent:
     """Uses an OpenRouter model to optimize the selected SVG from agent feedback."""
 
     def __init__(
@@ -597,7 +597,7 @@ class OpenRouterSvgOptimizerAgent:
         )
 
 
-class OpenRouterMemoryCuratorAgent:
+class MemoryCuratorAgent:
     """Uses an OpenRouter model to summarize a completed run into a reusable memory record."""
 
     def __init__(
@@ -645,7 +645,7 @@ class OpenRouterMemoryCuratorAgent:
         )
 
 
-class OpenRouterRefinerAgent:
+class RefinerAgent:
     """Uses an OpenRouter model to return a repaired complete SVG document."""
 
     def __init__(

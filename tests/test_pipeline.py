@@ -18,18 +18,18 @@ from svg_icon_agent.backends import generate_with_backend
 from svg_icon_agent.cli import main
 from svg_icon_agent.exporter import render_svg_to_png
 from svg_icon_agent.llm_agents import (
-    OpenRouterConsensusSelectorAgent,
-    OpenRouterGoalManagerAgent,
-    OpenRouterMemoryCuratorAgent,
-    OpenRouterMultiCandidateGeneratorAgent,
-    OpenRouterPlannerAgent,
-    OpenRouterPromptRewriterAgent,
-    OpenRouterRefinerAgent,
-    OpenRouterSemanticCriticAgent,
-    OpenRouterSvgGeneratorAgent,
-    OpenRouterSvgOptimizerAgent,
-    OpenRouterSvgQualityCriticAgent,
-    OpenRouterValidatorAgent,
+    ConsensusSelectorAgent,
+    GoalManagerAgent,
+    MemoryCuratorAgent,
+    MultiCandidateGeneratorAgent,
+    PlannerAgent,
+    PromptRewriterAgent,
+    RefinerAgent,
+    SemanticCriticAgent,
+    SvgGeneratorAgent,
+    SvgOptimizerAgent,
+    SvgQualityCriticAgent,
+    ValidatorAgent,
 )
 from svg_icon_agent.openrouter_client import OpenRouterClient, OpenRouterConfig, OpenRouterError, OpenRouterResponse
 from svg_icon_agent.models import SvgArtifact
@@ -402,18 +402,18 @@ class OpenRouterAgentBoundaryTests(unittest.TestCase):
 
     def test_all_agent_constructors_require_openrouter_client(self) -> None:
         for cls in (
-            OpenRouterPlannerAgent,
-            OpenRouterGoalManagerAgent,
-            OpenRouterMemoryCuratorAgent,
-            OpenRouterPromptRewriterAgent,
-            OpenRouterSvgGeneratorAgent,
-            OpenRouterMultiCandidateGeneratorAgent,
-            OpenRouterSemanticCriticAgent,
-            OpenRouterSvgQualityCriticAgent,
-            OpenRouterConsensusSelectorAgent,
-            OpenRouterSvgOptimizerAgent,
-            OpenRouterValidatorAgent,
-            OpenRouterRefinerAgent,
+            PlannerAgent,
+            GoalManagerAgent,
+            MemoryCuratorAgent,
+            PromptRewriterAgent,
+            SvgGeneratorAgent,
+            MultiCandidateGeneratorAgent,
+            SemanticCriticAgent,
+            SvgQualityCriticAgent,
+            ConsensusSelectorAgent,
+            SvgOptimizerAgent,
+            ValidatorAgent,
+            RefinerAgent,
         ):
             annotations = inspect.get_annotations(cls.__init__, eval_str=True)
             self.assertEqual(annotations["client"], OpenRouterClient)
@@ -454,7 +454,7 @@ class OpenRouterPipelineTests(unittest.TestCase):
         item = load_prompts(PROMPT_PATH)[0]
         client = FakeOpenRouterClient([_plan_response(item)])
 
-        result = OpenRouterPlannerAgent(
+        result = PlannerAgent(
             client,
             max_tokens=4096,
             reasoning=make_reasoning_config("none"),
@@ -474,7 +474,7 @@ class OpenRouterPipelineTests(unittest.TestCase):
         rewritten = "a minimal rocket launch icon with a clear centered silhouette and dynamic flame"
         client = FakeOpenRouterClient([_rewrite_response(rewritten)])
 
-        result = OpenRouterPromptRewriterAgent(client).rewrite(item)
+        result = PromptRewriterAgent(client).rewrite(item)
 
         self.assertEqual(result.item.id, item.id)
         self.assertEqual(result.item.prompt, rewritten)
@@ -489,7 +489,7 @@ class OpenRouterPipelineTests(unittest.TestCase):
         item = make_prompt_from_text("a cloud download icon")
         client = FakeOpenRouterClient([_goal_response()])
 
-        result = OpenRouterGoalManagerAgent(client).create_goal(item, manual_goal="mobile toolbar")
+        result = GoalManagerAgent(client).create_goal(item, manual_goal="mobile toolbar")
 
         self.assertIn("mobile", result.goal.objective)
         self.assertIn("clear-arrow", result.goal.visual_requirements)
@@ -500,11 +500,11 @@ class OpenRouterPipelineTests(unittest.TestCase):
 
     def test_memory_curator_returns_short_record(self) -> None:
         item = make_prompt_from_text("a cloud download icon")
-        plan_result = OpenRouterPlannerAgent(FakeOpenRouterClient([_plan_response(item)])).plan(item)
-        goal = OpenRouterGoalManagerAgent(FakeOpenRouterClient([_goal_response()])).create_goal(item).goal
+        plan_result = PlannerAgent(FakeOpenRouterClient([_plan_response(item)])).plan(item)
+        goal = GoalManagerAgent(FakeOpenRouterClient([_goal_response()])).create_goal(item).goal
         client = FakeOpenRouterClient([_memory_curator_response()])
 
-        result = OpenRouterMemoryCuratorAgent(client).curate(
+        result = MemoryCuratorAgent(client).curate(
             item,
             plan_result.plan,
             goal=goal,
@@ -569,7 +569,7 @@ class OpenRouterPipelineTests(unittest.TestCase):
     def test_collaboration_agents_generate_critique_and_select_candidates(self) -> None:
         item = load_prompts(PROMPT_PATH)[0]
         plan = _plan_response(item)
-        plan_result = OpenRouterPlannerAgent(FakeOpenRouterClient([plan])).plan(item)
+        plan_result = PlannerAgent(FakeOpenRouterClient([plan])).plan(item)
         client = FakeOpenRouterClient(
             [
                 _svg_response(VALID_SVG),
@@ -580,15 +580,15 @@ class OpenRouterPipelineTests(unittest.TestCase):
             ]
         )
 
-        candidates = OpenRouterMultiCandidateGeneratorAgent(client).generate(plan_result.plan, candidate_count=2)
+        candidates = MultiCandidateGeneratorAgent(client).generate(plan_result.plan, candidate_count=2)
         tool_reports = [SvgCheckTool().check(candidate) for candidate in candidates.artifacts]
-        semantic = OpenRouterSemanticCriticAgent(client).critique(plan_result.plan, list(candidates.artifacts))
-        quality = OpenRouterSvgQualityCriticAgent(client).critique(
+        semantic = SemanticCriticAgent(client).critique(plan_result.plan, list(candidates.artifacts))
+        quality = SvgQualityCriticAgent(client).critique(
             plan_result.plan,
             list(candidates.artifacts),
             tool_reports,
         )
-        selection = OpenRouterConsensusSelectorAgent(client).select(
+        selection = ConsensusSelectorAgent(client).select(
             plan_result.plan,
             list(candidates.artifacts),
             [semantic, quality],
@@ -604,7 +604,7 @@ class OpenRouterPipelineTests(unittest.TestCase):
 
     def test_optimizer_uses_llm_and_manual_feedback(self) -> None:
         item = load_prompts(PROMPT_PATH)[0]
-        plan_result = OpenRouterPlannerAgent(FakeOpenRouterClient([_plan_response(item)])).plan(item)
+        plan_result = PlannerAgent(FakeOpenRouterClient([_plan_response(item)])).plan(item)
         selected = SvgArtifact(id=item.id, stage="selected", svg=VALID_SVG)
         semantic = _critique_response(["candidate-2"], scores=[91])
         quality = _critique_response(["candidate-2"], scores=[88])
@@ -618,16 +618,16 @@ class OpenRouterPipelineTests(unittest.TestCase):
         )
         candidates = [SvgArtifact(id=item.id, stage="candidate-2", svg=VALID_SVG)]
         tool_reports = [SvgCheckTool().check(candidates[0])]
-        semantic_result = OpenRouterSemanticCriticAgent(client).critique(plan_result.plan, candidates)
-        quality_result = OpenRouterSvgQualityCriticAgent(client).critique(plan_result.plan, candidates, tool_reports)
-        selection = OpenRouterConsensusSelectorAgent(client).select(
+        semantic_result = SemanticCriticAgent(client).critique(plan_result.plan, candidates)
+        quality_result = SvgQualityCriticAgent(client).critique(plan_result.plan, candidates, tool_reports)
+        selection = ConsensusSelectorAgent(client).select(
             plan_result.plan,
             candidates,
             [semantic_result, quality_result],
             tool_reports,
         )
 
-        result = OpenRouterSvgOptimizerAgent(client).optimize(
+        result = SvgOptimizerAgent(client).optimize(
             plan_result.plan,
             selected,
             [semantic_result, quality_result],
@@ -646,7 +646,7 @@ class OpenRouterPipelineTests(unittest.TestCase):
 
     def test_optimizer_can_disable_llm_feedback(self) -> None:
         item = load_prompts(PROMPT_PATH)[0]
-        plan_result = OpenRouterPlannerAgent(FakeOpenRouterClient([_plan_response(item)])).plan(item)
+        plan_result = PlannerAgent(FakeOpenRouterClient([_plan_response(item)])).plan(item)
         selected = SvgArtifact(id=item.id, stage="selected", svg=VALID_SVG)
         selection = type(
             "Selection",
@@ -667,7 +667,7 @@ class OpenRouterPipelineTests(unittest.TestCase):
         tool_report = SvgCheckTool().check(selected)
         client = FakeOpenRouterClient([_optimizer_response()])
 
-        result = OpenRouterSvgOptimizerAgent(client).optimize(
+        result = SvgOptimizerAgent(client).optimize(
             plan_result.plan,
             selected,
             [],

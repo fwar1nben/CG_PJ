@@ -19,7 +19,7 @@ from svg_icon_agent.llm_agents import (
     CandidateCritique,
     LlmCritiqueResult,
     LlmSelectionResult,
-    OpenRouterSvgOptimizerAgent,
+    SvgOptimizerAgent,
 )
 from svg_icon_agent.memory import MemoryContext, MemoryRecord, RetrievedMemory
 from svg_icon_agent.models import GenerationGoal, IconPlan, SvgArtifact
@@ -330,7 +330,7 @@ def _post_run_optimize(
     selection = _selection_from_trace(trace_item, run.model)
     tool_report = SvgCheckTool().check(source_artifact)
     reasoning = make_reasoning_config(run.reasoning_effort, run.reasoning_max_tokens)
-    optimizer = OpenRouterSvgOptimizerAgent(client, max_tokens=run.max_tokens, reasoning=reasoning)
+    optimizer = SvgOptimizerAgent(client, max_tokens=run.max_tokens, reasoning=reasoning)
 
     raw_events = _read_jsonl(run.output_dir / "llm_raw_responses.jsonl")
     logger.log(f"{plan.id}: requesting post-run SVG optimizer.")
