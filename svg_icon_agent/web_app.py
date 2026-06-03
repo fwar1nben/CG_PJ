@@ -33,6 +33,46 @@ from svg_icon_agent.svg_check_tool import SvgCheckTool
 RUN_ID_RE = re.compile(r"^[a-z0-9-]+$")
 ClientFactory = Callable[[str, float, int], OpenRouterClient]
 
+WORKFLOW_NODES: tuple[dict[str, str], ...] = (
+    {"id": "memory", "label": "Memory"},
+    {"id": "goal-manager", "label": "Goal"},
+    {"id": "prompt-rewriter", "label": "Rewriter"},
+    {"id": "planner", "label": "Planner"},
+    {"id": "svg-generator", "label": "Generator / Candidates"},
+    {"id": "critic", "label": "Critics"},
+    {"id": "selector", "label": "Selector"},
+    {"id": "optimizer", "label": "Optimizer"},
+    {"id": "validator", "label": "Validator"},
+    {"id": "failure-taxonomy", "label": "Failure Taxonomy"},
+    {"id": "repair-router", "label": "Repair Router"},
+    {"id": "refiner", "label": "Refiner"},
+    {"id": "memory-curator", "label": "Curator"},
+    {"id": "exporter", "label": "Exporter"},
+)
+
+STAGE_TO_NODE = {
+    "memory": "memory",
+    "goal-manager": "goal-manager",
+    "prompt-rewriter": "prompt-rewriter",
+    "planner": "planner",
+    "svg-generator": "svg-generator",
+    "candidate-generator": "svg-generator",
+    "candidate-svg": "svg-generator",
+    "critic": "critic",
+    "semantic-critic": "critic",
+    "svg-quality-critic": "critic",
+    "selector": "selector",
+    "optimizer": "optimizer",
+    "svg-optimizer": "optimizer",
+    "post-run-optimizer": "optimizer",
+    "validator": "validator",
+    "failure-taxonomy": "failure-taxonomy",
+    "repair-router": "repair-router",
+    "refiner": "refiner",
+    "memory-curator": "memory-curator",
+    "exporter": "exporter",
+}
+
 
 @dataclass
 class WebRun:
@@ -499,9 +539,116 @@ def _run_payload(run: WebRun, *, include_files: bool = True) -> dict[str, Any]:
         "refined_validation": _read_json(run.output_dir / "refined_validation.json"),
         "raw_events": _read_jsonl(run.output_dir / "llm_raw_responses.jsonl") or run.raw_events,
     }
+    payload["agent_workflow"] = _agent_workflow_payload(run, payload)
     if include_files:
         payload["artifacts"] = _artifact_payload(run)
     return payload
+
+
+def _agent_workflow_payload(run: WebRun, payload: dict[str, Any]) -> list[dict[str, str]]:
+    trace_rows = payload.get("trace")
+    trace = trace_rows[0] if isinstance(trace_rows, list) and trace_rows and isinstance(trace_rows[0], dict) else {}
+    events = payload.get("events") if isinstance(payload.get("events"), list) else []
+    latest_stage = _latest_workflow_stage(events)
+    statuses = {node["id"]: "waiting" for node in WORKFLOW_NODES}
+
+    _mark_if_enabled(statuses, "memory", "done" if run.memory_enabled else "skipped")
+    _apply_backend_status(statuses, "goal-manager", trace.get("goal_manager_backend"))
+    _apply_backend_status(statuses, "prompt-rewriter", trace.get("rewriter_backend"))
+    _apply_backend_status(statuses, "planner", trace.get("planner_backend"))
+    _apply_backend_status(statuses, "svg-generator", trace.get("svg_backend"))
+    _apply_backend_status(statuses, "optimizer", trace.get("optimizer_backend"))
+    _apply_backend_status(statuses, "validator", trace.get("validator_backend"))
+    _apply_backend_status(statuses, "failure-taxonomy", trace.get("failure_taxonomy_backend"))
+    _apply_backend_status(statuses, "repair-router", trace.get("repair_router_backend"))
+    _apply_backend_status(statuses, "refiner", trace.get("refiner_backend"))
+    _apply_backend_status(statuses, "memory-curator", trace.get("memory_curator_backend"))
+
+    if run.workflow == "single":
+        for node_id in ("critic", "selector", "optimizer"):
+            statuses[node_id] = "skipped"
+    else:
+        if trace.get("critic_reports"):
+            statuses["critic"] = "done"
+        if trace.get("selected_candidate_id"):
+            statuses["selector"] = "done"
+
+    if payload.get("summary"):
+        statuses["exporter"] = "done"
+    if run.status == "failed":
+        error_node = _first_error_node(trace) or latest_stage or "pipeline"
+        if error_node in statuses:
+            statuses[error_node] = "error"
+    if run.status in {"running", "queued", "optimizing"} and latest_stage in statuses:
+        statuses[latest_stage] = "active"
+
+    if run.status == "completed":
+        for node_id in ("failure-taxonomy", "repair-router", "refiner"):
+            if statuses[node_id] == "waiting":
+                statuses[node_id] = "skipped"
+        for node_id, status in list(statuses.items()):
+            if status == "active":
+                statuses[node_id] = "done"
+
+    return [
+        {
+            "id": node["id"],
+            "label": node["label"],
+            "status": statuses[node["id"]],
+        }
+        for node in WORKFLOW_NODES
+    ]
+
+
+def _apply_backend_status(statuses: dict[str, str], node_id: str, value: Any) -> None:
+    if not isinstance(value, str) or not value:
+        return
+    if value == "not-run":
+        return
+    if value == "skipped":
+        statuses[node_id] = "skipped"
+    elif "error" in value:
+        statuses[node_id] = "error"
+    else:
+        statuses[node_id] = "done"
+
+
+def _mark_if_enabled(statuses: dict[str, str], node_id: str, status: str) -> None:
+    if statuses.get(node_id) == "waiting":
+        statuses[node_id] = status
+
+
+def _latest_workflow_stage(events: list[Any]) -> str | None:
+    for event in reversed(events):
+        if not isinstance(event, dict):
+            continue
+        stage = event.get("stage")
+        if not isinstance(stage, str):
+            continue
+        node_id = STAGE_TO_NODE.get(stage)
+        if node_id:
+            return node_id
+    return None
+
+
+def _first_error_node(trace: dict[str, Any]) -> str | None:
+    backend_fields = (
+        ("goal-manager", "goal_manager_backend"),
+        ("prompt-rewriter", "rewriter_backend"),
+        ("planner", "planner_backend"),
+        ("svg-generator", "svg_backend"),
+        ("optimizer", "optimizer_backend"),
+        ("validator", "validator_backend"),
+        ("failure-taxonomy", "failure_taxonomy_backend"),
+        ("repair-router", "repair_router_backend"),
+        ("refiner", "refiner_backend"),
+        ("memory-curator", "memory_curator_backend"),
+    )
+    for node_id, field_name in backend_fields:
+        value = trace.get(field_name)
+        if isinstance(value, str) and "error" in value:
+            return node_id
+    return None
 
 
 def _prompt_rewrite_payload(run: WebRun) -> dict[str, str] | None:
@@ -1177,6 +1324,50 @@ _INDEX_HTML = """<!doctype html>
       display: grid;
       gap: 8px;
     }
+    .workflow-graph {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+    .workflow-node {
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 8px;
+      min-height: 58px;
+      background: #fff;
+      display: grid;
+      align-content: center;
+      gap: 4px;
+    }
+    .workflow-node strong {
+      font-size: 12px;
+      line-height: 1.2;
+    }
+    .workflow-node span {
+      color: var(--muted);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0;
+    }
+    .workflow-node.done {
+      border-color: #a6f4c5;
+      background: #ecfdf3;
+    }
+    .workflow-node.active {
+      border-color: var(--accent);
+      background: #eef6ff;
+      box-shadow: 0 0 0 2px rgba(21, 112, 239, 0.14);
+    }
+    .workflow-node.error {
+      border-color: #fecdca;
+      background: #fef3f2;
+    }
+    .workflow-node.skipped {
+      background: #f8fafc;
+      color: var(--muted);
+      opacity: 0.72;
+    }
     .event {
       border: 1px solid var(--line);
       border-radius: 6px;
@@ -1481,7 +1672,7 @@ _INDEX_HTML = """<!doctype html>
       runStateBox.textContent = data.status || 'unknown';
       runStateBox.className = `pill ${data.status === 'completed' ? 'ok' : data.status === 'failed' ? 'bad' : ''}`;
       setStatus(data.error || statusText(data), data.status === 'failed' ? 'bad' : data.status === 'completed' ? 'ok' : '');
-      renderTimeline(data.events || []);
+      renderTimeline(data.events || [], data.agent_workflow || []);
       renderJson('trace', data.trace || data.summary || {});
       renderJson('raw', data.raw_events || []);
       renderPromptRewrite(data);
@@ -1511,19 +1702,26 @@ _INDEX_HTML = """<!doctype html>
       optimizeButton.disabled = busy || !data.id || !(data.artifacts && (data.artifacts.refined_svg_text || data.artifacts.baseline_svg_text));
     }
 
-    function renderTimeline(events) {
+    function renderTimeline(events, workflow) {
       const box = document.getElementById('timeline');
-      if (!events.length) {
-        box.innerHTML = '<div class="empty">No flow events</div>';
-        return;
-      }
-      box.innerHTML = `<div class="timeline">${events.map((event) => `
-        <div class="event">
-          <span>${Number(event.elapsed || 0).toFixed(1)}s</span>
-          <span class="stage">${escapeHtml(event.stage || 'pipeline')}</span>
-          <span>${escapeHtml(event.message || '')}</span>
-        </div>
-      `).join('')}</div>`;
+      const workflowHtml = workflow.length ? `
+        <div class="workflow-graph">${workflow.map((node) => `
+          <div class="workflow-node ${escapeHtml(node.status || 'waiting')}">
+            <strong>${escapeHtml(node.label || node.id || 'Agent')}</strong>
+            <span>${escapeHtml(node.status || 'waiting')}</span>
+          </div>
+        `).join('')}</div>
+      ` : '';
+      const timelineHtml = events.length ? `
+        <div class="timeline">${events.map((event) => `
+          <div class="event">
+            <span>${Number(event.elapsed || 0).toFixed(1)}s</span>
+            <span class="stage">${escapeHtml(event.stage || 'pipeline')}</span>
+            <span>${escapeHtml(event.message || '')}</span>
+          </div>
+        `).join('')}</div>
+      ` : '<div class="empty">No flow events</div>';
+      box.innerHTML = workflowHtml + timelineHtml;
     }
 
     function renderJson(id, value) {
