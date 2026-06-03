@@ -1324,21 +1324,28 @@ _INDEX_HTML = """<!doctype html>
       display: grid;
       gap: 8px;
     }
-    .workflow-graph {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
-      gap: 8px;
+    .workflow-dag {
+      display: flex;
+      align-items: center;
+      gap: 0;
       margin-bottom: 14px;
+      padding: 4px 2px 12px;
+      overflow-x: auto;
+      overscroll-behavior-x: contain;
     }
     .workflow-node {
       border: 1px solid var(--line);
       border-radius: 6px;
-      padding: 8px;
-      min-height: 58px;
+      padding: 8px 10px;
+      width: 140px;
+      min-width: 140px;
+      min-height: 62px;
       background: #fff;
       display: grid;
       align-content: center;
       gap: 4px;
+      position: relative;
+      z-index: 1;
     }
     .workflow-node strong {
       font-size: 12px;
@@ -1367,6 +1374,42 @@ _INDEX_HTML = """<!doctype html>
       background: #f8fafc;
       color: var(--muted);
       opacity: 0.72;
+    }
+    .workflow-edge {
+      width: 46px;
+      min-width: 46px;
+      height: 2px;
+      background: var(--line);
+      position: relative;
+    }
+    .workflow-edge::after {
+      content: "";
+      position: absolute;
+      right: -1px;
+      top: 50%;
+      width: 0;
+      height: 0;
+      border-top: 6px solid transparent;
+      border-bottom: 6px solid transparent;
+      border-left: 8px solid var(--line);
+      transform: translateY(-50%);
+    }
+    .workflow-edge.done,
+    .workflow-edge.active {
+      background: var(--accent);
+    }
+    .workflow-edge.done::after,
+    .workflow-edge.active::after {
+      border-left-color: var(--accent);
+    }
+    .workflow-edge.error {
+      background: var(--bad);
+    }
+    .workflow-edge.error::after {
+      border-left-color: var(--bad);
+    }
+    .workflow-edge.skipped {
+      opacity: 0.42;
     }
     .event {
       border: 1px solid var(--line);
@@ -1704,14 +1747,7 @@ _INDEX_HTML = """<!doctype html>
 
     function renderTimeline(events, workflow) {
       const box = document.getElementById('timeline');
-      const workflowHtml = workflow.length ? `
-        <div class="workflow-graph">${workflow.map((node) => `
-          <div class="workflow-node ${escapeHtml(node.status || 'waiting')}">
-            <strong>${escapeHtml(node.label || node.id || 'Agent')}</strong>
-            <span>${escapeHtml(node.status || 'waiting')}</span>
-          </div>
-        `).join('')}</div>
-      ` : '';
+      const workflowHtml = workflow.length ? renderWorkflowGraph(workflow) : '';
       const timelineHtml = events.length ? `
         <div class="timeline">${events.map((event) => `
           <div class="event">
@@ -1722,6 +1758,31 @@ _INDEX_HTML = """<!doctype html>
         `).join('')}</div>
       ` : '<div class="empty">No flow events</div>';
       box.innerHTML = workflowHtml + timelineHtml;
+    }
+
+    function renderWorkflowGraph(workflow) {
+      const items = [];
+      workflow.forEach((node, index) => {
+        const status = node.status || 'waiting';
+        items.push(`
+          <div class="workflow-node ${escapeHtml(status)}" title="${escapeHtml(node.id || '')}">
+            <strong>${escapeHtml(node.label || node.id || 'Agent')}</strong>
+            <span>${escapeHtml(status)}</span>
+          </div>
+        `);
+        if (index < workflow.length - 1) {
+          const next = workflow[index + 1] || {};
+          items.push(`<div class="workflow-edge ${escapeHtml(edgeStatus(status, next.status || 'waiting'))}" aria-label="depends on"></div>`);
+        }
+      });
+      return `<div class="workflow-dag" aria-label="Directed Agent workflow graph">${items.join('')}</div>`;
+    }
+
+    function edgeStatus(currentStatus, nextStatus) {
+      if (currentStatus === 'error' || nextStatus === 'error') return 'error';
+      if (nextStatus === 'active') return 'active';
+      if (currentStatus === 'done' || currentStatus === 'skipped') return currentStatus;
+      return 'waiting';
     }
 
     function renderJson(id, value) {

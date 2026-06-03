@@ -1053,6 +1053,14 @@ class WebAppTests(unittest.TestCase):
             self.assertTrue(all(call["kwargs"]["max_tokens"] == 4096 for call in fake_client.calls))
             self.assertTrue(all(call["kwargs"]["reasoning"] == {"max_tokens": 128, "exclude": True} for call in fake_client.calls))
 
+    def test_web_frontend_renders_workflow_as_directed_graph(self) -> None:
+        app = create_app(run_async=False)
+        html = app.test_client().get("/").get_data(as_text=True)
+
+        self.assertIn("workflow-dag", html)
+        self.assertIn("workflow-edge", html)
+        self.assertIn("Directed Agent workflow graph", html)
+
     def test_web_goal_and_memory_are_passed_to_llm_prompts(self) -> None:
         prompt = "a minimal cloud download icon with a clear arrow"
         item = make_prompt_from_text(prompt, source="web")
