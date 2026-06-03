@@ -81,3 +81,51 @@ class ValidationReport:
             "is_valid": self.is_valid,
             "issues": [issue.to_json() for issue in self.issues],
         }
+
+
+@dataclass(frozen=True)
+class FailureTaxonomy:
+    id: str
+    stage: str
+    round_index: int
+    failure_types: tuple[str, ...]
+    root_causes: tuple[str, ...]
+    evidence: tuple[str, ...]
+    priority: str
+    repair_goals: tuple[str, ...]
+
+    def to_json(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "stage": self.stage,
+            "round": self.round_index,
+            "failure_types": list(self.failure_types),
+            "root_causes": list(self.root_causes),
+            "evidence": list(self.evidence),
+            "priority": self.priority,
+            "repair_goals": list(self.repair_goals),
+        }
+
+
+@dataclass(frozen=True)
+class RepairRoute:
+    id: str
+    stage: str
+    round_index: int
+    route: str
+    strategy: str
+    ordered_actions: tuple[str, ...]
+    refiner_brief: str
+    risk_notes: tuple[str, ...]
+
+    def to_json(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "stage": self.stage,
+            "round": self.round_index,
+            "route": self.route,
+            "strategy": self.strategy,
+            "ordered_actions": list(self.ordered_actions),
+            "refiner_brief": self.refiner_brief,
+            "risk_notes": list(self.risk_notes),
+        }

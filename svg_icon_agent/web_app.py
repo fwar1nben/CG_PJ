@@ -443,6 +443,8 @@ def _post_run_optimize(
         refined_valid=refined_reports[0].is_valid if refined_reports else None,
         score_delta=refined_reports[0].score - baseline_reports[0].score if baseline_reports and refined_reports else None,
         validator_backend=refinement.agent_statuses.get("validator") if refinement else None,
+        failure_taxonomy_backend=refinement.agent_statuses.get("failure_taxonomy") if refinement else None,
+        repair_router_backend=refinement.agent_statuses.get("repair_router") if refinement else None,
         refiner_backend=refinement.agent_statuses.get("refiner") if refinement else None,
     )
     logger.log(f"{plan.id}: post-run manual optimization complete.")
@@ -698,6 +700,28 @@ def _write_run_json_reports(output_dir: Path, baseline_reports, refined_reports,
         json.dumps([report.to_json() for report in refined_reports], indent=2),
         encoding="utf-8",
     )
+    (output_dir / "failure_taxonomy.json").write_text(
+        json.dumps(
+            [
+                taxonomy.to_json()
+                for result in refinements
+                for taxonomy in result.failure_taxonomies
+            ],
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    (output_dir / "repair_routes.json").write_text(
+        json.dumps(
+            [
+                route.to_json()
+                for result in refinements
+                for route in result.repair_routes
+            ],
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
     (output_dir / "refinement_history.json").write_text(
         json.dumps([result.to_json() for result in refinements], indent=2),
         encoding="utf-8",
@@ -719,6 +743,8 @@ def _update_post_run_trace(
     refined_valid: bool | None = None,
     score_delta: int | None = None,
     validator_backend: str | None = None,
+    failure_taxonomy_backend: str | None = None,
+    repair_router_backend: str | None = None,
     refiner_backend: str | None = None,
 ) -> None:
     path = output_dir / "llm_trace.json"
@@ -757,8 +783,18 @@ def _update_post_run_trace(
         item["score_delta"] = score_delta
     if validator_backend:
         item["validator_backend"] = validator_backend
+    if failure_taxonomy_backend:
+        item["failure_taxonomy_backend"] = failure_taxonomy_backend
+    if repair_router_backend:
+        item["repair_router_backend"] = repair_router_backend
     if refiner_backend:
         item["refiner_backend"] = refiner_backend
+    taxonomy_rows = _read_json(output_dir / "failure_taxonomy.json")
+    if isinstance(taxonomy_rows, list):
+        item["failure_taxonomies"] = taxonomy_rows
+    route_rows = _read_json(output_dir / "repair_routes.json")
+    if isinstance(route_rows, list):
+        item["repair_routes"] = route_rows
     rows[0] = item
     path.write_text(json.dumps(rows, indent=2), encoding="utf-8")
 

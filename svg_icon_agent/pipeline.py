@@ -365,7 +365,11 @@ def _merge_refinement_traces(
         if trace is None:
             continue
         trace.validator_backend = result.agent_statuses.get("validator", "not-run")
+        trace.failure_taxonomy_backend = result.agent_statuses.get("failure_taxonomy", "not-run")
+        trace.repair_router_backend = result.agent_statuses.get("repair_router", "not-run")
         trace.refiner_backend = result.agent_statuses.get("refiner", "not-run")
+        trace.failure_taxonomies = [taxonomy.to_json() for taxonomy in result.failure_taxonomies]
+        trace.repair_routes = [route.to_json() for route in result.repair_routes]
         trace.usage.update(result.usage)
         trace.errors.extend(result.errors)
 
@@ -398,6 +402,28 @@ def _write_json_outputs(
     )
     (output_dir / "refined_validation.json").write_text(
         json.dumps([report.to_json() for report in refined_reports], indent=2),
+        encoding="utf-8",
+    )
+    (output_dir / "failure_taxonomy.json").write_text(
+        json.dumps(
+            [
+                taxonomy.to_json()
+                for result in refinements
+                for taxonomy in result.failure_taxonomies
+            ],
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    (output_dir / "repair_routes.json").write_text(
+        json.dumps(
+            [
+                route.to_json()
+                for result in refinements
+                for route in result.repair_routes
+            ],
+            indent=2,
+        ),
         encoding="utf-8",
     )
     (output_dir / "refinement_history.json").write_text(
@@ -446,6 +472,10 @@ def _stage_from_message(message: str) -> str:
         return "prompt-rewriter"
     if "optimizer" in lowered or "optimized" in lowered:
         return "optimizer"
+    if "failure taxonomy" in lowered:
+        return "failure-taxonomy"
+    if "repair router" in lowered:
+        return "repair-router"
     if "svg draft" in lowered or "baseline svg" in lowered:
         return "svg-generator"
     if "candidate" in lowered:

@@ -39,6 +39,8 @@ class BackendTrace:
     planner_backend: str = "not-run"
     svg_backend: str = "not-run"
     validator_backend: str = "not-run"
+    failure_taxonomy_backend: str = "not-run"
+    repair_router_backend: str = "not-run"
     refiner_backend: str = "not-run"
     rewriter_backend: str = "not-run"
     goal_manager_backend: str = "not-run"
@@ -61,6 +63,8 @@ class BackendTrace:
     candidate_tool_scores: dict[str, int] = field(default_factory=dict)
     critic_scores: dict[str, dict[str, int]] = field(default_factory=dict)
     critic_reports: dict[str, dict[str, Any]] = field(default_factory=dict)
+    failure_taxonomies: list[dict[str, Any]] = field(default_factory=list)
+    repair_routes: list[dict[str, Any]] = field(default_factory=list)
     fallback_reason: str | None = None
     usage: dict[str, Any] = field(default_factory=dict)
     errors: list[str] = field(default_factory=list)
@@ -78,6 +82,8 @@ class BackendTrace:
             "planner_backend": self.planner_backend,
             "svg_backend": self.svg_backend,
             "validator_backend": self.validator_backend,
+            "failure_taxonomy_backend": self.failure_taxonomy_backend,
+            "repair_router_backend": self.repair_router_backend,
             "refiner_backend": self.refiner_backend,
             "rewriter_backend": self.rewriter_backend,
             "goal_manager_backend": self.goal_manager_backend,
@@ -100,6 +106,8 @@ class BackendTrace:
             "candidate_tool_scores": self.candidate_tool_scores,
             "critic_scores": self.critic_scores,
             "critic_reports": self.critic_reports,
+            "failure_taxonomies": self.failure_taxonomies,
+            "repair_routes": self.repair_routes,
             "fallback_reason": self.fallback_reason,
             "usage": self.usage,
             "errors": self.errors,

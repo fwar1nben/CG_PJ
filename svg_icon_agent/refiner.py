@@ -5,8 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from svg_icon_agent.llm_agents import RefinerAgent, ValidatorAgent
-from svg_icon_agent.models import IconPlan, SvgArtifact, ValidationIssue, ValidationReport
+from svg_icon_agent.llm_agents import FailureTaxonomyAgent, RefinerAgent, RepairRouterAgent, ValidatorAgent
+from svg_icon_agent.models import FailureTaxonomy, IconPlan, RepairRoute, SvgArtifact, ValidationIssue, ValidationReport
 from svg_icon_agent.openrouter_client import DEFAULT_OPENROUTER_MODEL, OpenRouterClient, OpenRouterError
 from svg_icon_agent.progress import ProgressLogger
 from svg_icon_agent.svg_check_tool import SvgCheckTool
@@ -18,6 +18,8 @@ class RefinementResult:
     artifact: SvgArtifact
     reports: tuple[ValidationReport, ...]
     rounds_used: int
+    failure_taxonomies: tuple[FailureTaxonomy, ...] = field(default_factory=tuple)
+    repair_routes: tuple[RepairRoute, ...] = field(default_factory=tuple)
     raw_llm_events: tuple[dict[str, Any], ...] = field(default_factory=tuple)
     usage: dict[str, Any] = field(default_factory=dict)
     agent_statuses: dict[str, str] = field(default_factory=dict)
@@ -50,6 +52,8 @@ class RefinementResult:
             "score_delta": final_score - first_score,
             "accepted": self.refined_report.is_valid,
             "reports": [report.to_json() for report in self.reports],
+            "failure_taxonomies": [taxonomy.to_json() for taxonomy in self.failure_taxonomies],
+            "repair_routes": [route.to_json() for route in self.repair_routes],
             "agent_statuses": self.agent_statuses,
             "errors": list(self.errors),
         }
@@ -75,6 +79,8 @@ def refine_artifacts(
     logger = progress or ProgressLogger(verbose=False)
     checker = SvgCheckTool()
     llm_validator = ValidatorAgent(client, max_tokens=max_tokens, reasoning=reasoning)
+    taxonomy_agent = FailureTaxonomyAgent(client, max_tokens=max_tokens, reasoning=reasoning)
+    repair_router = RepairRouterAgent(client, max_tokens=max_tokens, reasoning=reasoning)
     llm_refiner = RefinerAgent(client, max_tokens=max_tokens, reasoning=reasoning)
     results: list[RefinementResult] = []
 
@@ -88,6 +94,8 @@ def refine_artifacts(
                 artifact,
                 checker=checker,
                 llm_validator=llm_validator,
+                taxonomy_agent=taxonomy_agent,
+                repair_router=repair_router,
                 llm_refiner=llm_refiner,
                 max_rounds=max_rounds,
                 model=model,
@@ -106,6 +114,8 @@ def _refine_one(
     *,
     checker: SvgCheckTool,
     llm_validator: ValidatorAgent,
+    taxonomy_agent: FailureTaxonomyAgent,
+    repair_router: RepairRouterAgent,
     llm_refiner: RefinerAgent,
     max_rounds: int,
     model: str,
@@ -116,10 +126,14 @@ def _refine_one(
 ) -> RefinementResult:
     current = artifact
     reports: list[ValidationReport] = []
+    failure_taxonomies: list[FailureTaxonomy] = []
+    repair_routes: list[RepairRoute] = []
     raw_events: list[dict[str, Any]] = []
     usage: dict[str, Any] = {}
     errors: list[str] = []
     validator_status = "not-run"
+    taxonomy_status = "not-run"
+    router_status = "not-run"
     refiner_status = "not-run"
     rounds_used = 0
 
@@ -158,6 +172,74 @@ def _refine_one(
         if rounds_used >= max_rounds:
             break
 
+        progress.log(f"[{index}/{total}] {artifact.id}: requesting failure taxonomy round {round_index + 1}.")
+        try:
+            taxonomy_result = taxonomy_agent.classify(
+                plan,
+                current,
+                report,
+                tool_report,
+                round_index=round_index + 1,
+            )
+        except OpenRouterError as exc:
+            taxonomy_status = "openrouter-error"
+            errors.append(f"failure taxonomy round {round_index + 1}: {exc}")
+            raw_events.append(
+                _raw_event(artifact.id, "failure-taxonomy", "error", model, error=exc, round_index=round_index + 1)
+            )
+            progress.log(f"[{index}/{total}] {artifact.id}: failure taxonomy failed; stopping refinement.")
+            break
+
+        taxonomy_status = "openrouter"
+        taxonomy = taxonomy_result.taxonomy
+        failure_taxonomies.append(taxonomy)
+        usage[f"failure_taxonomy_round_{round_index + 1}"] = taxonomy_result.response.usage
+        raw_events.append(
+            _raw_event(
+                artifact.id,
+                "failure-taxonomy",
+                "success",
+                model,
+                response=taxonomy_result.response.raw,
+                round_index=round_index + 1,
+            )
+        )
+
+        progress.log(f"[{index}/{total}] {artifact.id}: requesting repair router round {round_index + 1}.")
+        try:
+            route_result = repair_router.route(
+                plan,
+                current,
+                report,
+                tool_report,
+                taxonomy,
+                round_index=round_index + 1,
+                collaboration_brief=collaboration_brief,
+            )
+        except OpenRouterError as exc:
+            router_status = "openrouter-error"
+            errors.append(f"repair router round {round_index + 1}: {exc}")
+            raw_events.append(
+                _raw_event(artifact.id, "repair-router", "error", model, error=exc, round_index=round_index + 1)
+            )
+            progress.log(f"[{index}/{total}] {artifact.id}: repair router failed; stopping refinement.")
+            break
+
+        router_status = "openrouter"
+        repair_route = route_result.route
+        repair_routes.append(repair_route)
+        usage[f"repair_router_round_{round_index + 1}"] = route_result.response.usage
+        raw_events.append(
+            _raw_event(
+                artifact.id,
+                "repair-router",
+                "success",
+                model,
+                response=route_result.response.raw,
+                round_index=round_index + 1,
+            )
+        )
+
         progress.log(f"[{index}/{total}] {artifact.id}: requesting LLM refiner round {round_index + 1}.")
         try:
             refinement_result = llm_refiner.refine(
@@ -167,6 +249,7 @@ def _refine_one(
                 tool_report,
                 round_index=round_index + 1,
                 collaboration_brief=collaboration_brief,
+                repair_route=repair_route,
             )
         except OpenRouterError as exc:
             refiner_status = "openrouter-error"
@@ -198,10 +281,14 @@ def _refine_one(
         artifact=current,
         reports=tuple(reports),
         rounds_used=rounds_used,
+        failure_taxonomies=tuple(failure_taxonomies),
+        repair_routes=tuple(repair_routes),
         raw_llm_events=tuple(raw_events),
         usage=usage,
         agent_statuses={
             "validator": validator_status,
+            "failure_taxonomy": taxonomy_status,
+            "repair_router": router_status,
             "refiner": refiner_status,
         },
         errors=tuple(errors),

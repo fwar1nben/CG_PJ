@@ -249,6 +249,40 @@ def _optimizer_response(svg=None):
     )
 
 
+def _failure_taxonomy_response():
+    return OpenRouterResponse(
+        content=json.dumps(
+            {
+                "failure_types": ["syntax_safety", "renderability"],
+                "root_causes": ["unsafe script element"],
+                "evidence": ["validator reported unsafe-tag", "tool report rejected script"],
+                "priority": "critical",
+                "repair_goals": ["remove unsafe element", "return safe editable svg"],
+            }
+        ),
+        model="openai/gpt-oss-120b:free",
+        usage={"completion_tokens": 32},
+        raw={"choices": [{"message": {"content": "taxonomy-json"}}]},
+    )
+
+
+def _repair_route_response(route="safety_rebuild"):
+    return OpenRouterResponse(
+        content=json.dumps(
+            {
+                "route": route,
+                "strategy": "Rebuild the unsafe SVG with allowed editable primitives.",
+                "ordered_actions": ["remove script", "restore 256 canvas", "preserve prompt semantics"],
+                "refiner_brief": "Return a complete safe SVG with no scripts or external assets.",
+                "risk_notes": ["avoid losing the main cloud download meaning"],
+            }
+        ),
+        model="openai/gpt-oss-120b:free",
+        usage={"completion_tokens": 38},
+        raw={"choices": [{"message": {"content": "repair-route-json"}}]},
+    )
+
+
 def _collaborative_success_responses(item, winner="candidate-2"):
     candidate_ids = ["candidate-1", "candidate-2", "candidate-3"]
     return [
@@ -537,6 +571,8 @@ class OpenRouterPipelineTests(unittest.TestCase):
                     score=20,
                     issues=[{"code": "unsafe-tag", "severity": "error", "message": "Remove script."}],
                 ),
+                _failure_taxonomy_response(),
+                _repair_route_response(),
                 _svg_response(VALID_SVG),
                 _validation_response(valid=True, score=100, issues=[]),
             ]
@@ -557,11 +593,15 @@ class OpenRouterPipelineTests(unittest.TestCase):
             model="openai/gpt-oss-120b:free",
         )
 
-        self.assertEqual(len(client.calls), 6)
+        self.assertEqual(len(client.calls), 8)
         self.assertEqual(backend.traces[0].planner_backend, "openrouter")
         self.assertEqual(backend.traces[0].svg_backend, "openrouter")
         self.assertEqual(refinements[0].agent_statuses["validator"], "openrouter")
+        self.assertEqual(refinements[0].agent_statuses["failure_taxonomy"], "openrouter")
+        self.assertEqual(refinements[0].agent_statuses["repair_router"], "openrouter")
         self.assertEqual(refinements[0].agent_statuses["refiner"], "openrouter")
+        self.assertEqual(refinements[0].failure_taxonomies[0].failure_types, ("syntax_safety", "renderability"))
+        self.assertEqual(refinements[0].repair_routes[0].route, "safety_rebuild")
         self.assertEqual(refinements[0].rounds_used, 1)
         self.assertTrue(refinements[0].refined_report.is_valid)
         self.assertNotIn("<script", refinements[0].artifact.svg)

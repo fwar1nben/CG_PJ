@@ -8,7 +8,15 @@ from dataclasses import dataclass
 from typing import Any
 
 from svg_icon_agent.memory import MemoryContext
-from svg_icon_agent.models import GenerationGoal, IconPlan, SvgArtifact, ValidationIssue, ValidationReport
+from svg_icon_agent.models import (
+    FailureTaxonomy,
+    GenerationGoal,
+    IconPlan,
+    RepairRoute,
+    SvgArtifact,
+    ValidationIssue,
+    ValidationReport,
+)
 from svg_icon_agent.openrouter_client import OpenRouterClient, OpenRouterError, OpenRouterResponse
 from svg_icon_agent.prompts import HEX_RE, PromptItem, VALID_CATEGORIES, VALID_STYLES
 
@@ -18,6 +26,8 @@ DEFAULT_MEMORY_CURATOR_MAX_TOKENS = 900
 DEFAULT_REWRITER_MAX_TOKENS = 700
 DEFAULT_SVG_MAX_TOKENS = 1800
 DEFAULT_VALIDATOR_MAX_TOKENS = 1200
+DEFAULT_FAILURE_TAXONOMY_MAX_TOKENS = 1200
+DEFAULT_REPAIR_ROUTER_MAX_TOKENS = 1200
 DEFAULT_OPTIMIZER_MAX_TOKENS = 2200
 DEFAULT_REFINER_MAX_TOKENS = 2200
 
@@ -56,6 +66,18 @@ class LlmSvgResult:
 @dataclass(frozen=True)
 class LlmValidationResult:
     report: ValidationReport
+    response: OpenRouterResponse
+
+
+@dataclass(frozen=True)
+class LlmFailureTaxonomyResult:
+    taxonomy: FailureTaxonomy
+    response: OpenRouterResponse
+
+
+@dataclass(frozen=True)
+class LlmRepairRouteResult:
+    route: RepairRoute
     response: OpenRouterResponse
 
 
@@ -415,6 +437,118 @@ class ValidatorAgent:
         )
 
 
+class FailureTaxonomyAgent:
+    """Uses a model to classify validation failures before repair."""
+
+    def __init__(
+        self,
+        client: OpenRouterClient,
+        max_tokens: int | None = None,
+        reasoning: dict[str, Any] | None = None,
+    ) -> None:
+        self.client = client
+        self.max_tokens = max_tokens
+        self.reasoning = reasoning
+
+    def classify(
+        self,
+        plan: IconPlan,
+        artifact: SvgArtifact,
+        validation_report: ValidationReport,
+        tool_report: ValidationReport,
+        *,
+        round_index: int,
+    ) -> LlmFailureTaxonomyResult:
+        response = self.client.chat(
+            [
+                {
+                    "role": "system",
+                    "content": (
+                        "You are a failure taxonomy agent for SVG icon repair. Return only JSON. "
+                        "Classify the actual repair blockers, cite evidence, and keep the output concise."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": _failure_taxonomy_prompt(
+                        plan,
+                        artifact,
+                        validation_report,
+                        tool_report,
+                        round_index,
+                    ),
+                },
+            ],
+            response_format={"type": "json_object"},
+            reasoning=self.reasoning,
+            temperature=0.08,
+            max_tokens=self.max_tokens or DEFAULT_FAILURE_TAXONOMY_MAX_TOKENS,
+        )
+        data = _json_object(response.content, "Failure taxonomy")
+        return LlmFailureTaxonomyResult(
+            taxonomy=_coerce_failure_taxonomy(artifact, data, round_index),
+            response=response,
+        )
+
+
+class RepairRouterAgent:
+    """Uses a model to choose a repair strategy for the Refiner Agent."""
+
+    def __init__(
+        self,
+        client: OpenRouterClient,
+        max_tokens: int | None = None,
+        reasoning: dict[str, Any] | None = None,
+    ) -> None:
+        self.client = client
+        self.max_tokens = max_tokens
+        self.reasoning = reasoning
+
+    def route(
+        self,
+        plan: IconPlan,
+        artifact: SvgArtifact,
+        validation_report: ValidationReport,
+        tool_report: ValidationReport,
+        taxonomy: FailureTaxonomy,
+        *,
+        round_index: int,
+        collaboration_brief: str | None = None,
+    ) -> LlmRepairRouteResult:
+        response = self.client.chat(
+            [
+                {
+                    "role": "system",
+                    "content": (
+                        "You are a repair router agent for SVG icon repair. Return only JSON. "
+                        "Choose one repair route and write a brief that another model can use to repair the SVG."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": _repair_router_prompt(
+                        plan,
+                        artifact,
+                        validation_report,
+                        tool_report,
+                        taxonomy,
+                        round_index,
+                        collaboration_brief=collaboration_brief,
+                    ),
+                },
+            ],
+            response_format={"type": "json_object"},
+            reasoning=self.reasoning,
+            temperature=0.08,
+            max_tokens=self.max_tokens or DEFAULT_REPAIR_ROUTER_MAX_TOKENS,
+        )
+        data = _json_object(response.content, "Repair router")
+        return LlmRepairRouteResult(
+            route=_coerce_repair_route(artifact, data, round_index),
+            response=response,
+        )
+
+
 class SemanticCriticAgent:
     """Uses an OpenRouter model to judge prompt alignment and small-icon readability."""
 
@@ -667,6 +801,7 @@ class RefinerAgent:
         *,
         round_index: int,
         collaboration_brief: str | None = None,
+        repair_route: RepairRoute | None = None,
     ) -> LlmRefinementResult:
         response = self.client.chat(
             [
@@ -686,6 +821,7 @@ class RefinerAgent:
                         tool_report,
                         round_index,
                         collaboration_brief=collaboration_brief,
+                        repair_route=repair_route,
                     ),
                 },
             ],
@@ -1140,6 +1276,103 @@ SVG to validate:
 """
 
 
+def _failure_taxonomy_prompt(
+    plan: IconPlan,
+    artifact: SvgArtifact,
+    validation_report: ValidationReport,
+    tool_report: ValidationReport,
+    round_index: int,
+) -> str:
+    return f"""Classify the failures that block this SVG icon from being accepted.
+Return one JSON object with this exact shape:
+{{
+  "failure_types": ["syntax_safety|renderability|semantic_mismatch|visual_clarity|editability|constraint_violation"],
+  "root_causes": ["short root cause"],
+  "evidence": ["short evidence from validator, tool report, or SVG"],
+  "priority": "low|medium|high|critical",
+  "repair_goals": ["short repair goal"]
+}}
+
+Rules:
+- Use only the listed failure type labels when they apply.
+- Prefer specific evidence over generic advice.
+- Focus on problems that a later SVG repair agent can actually fix.
+- Do not propose local code changes, model settings, or prompt changes.
+- Do not include markdown or SVG code.
+
+Icon plan JSON:
+{json.dumps(plan.to_json(), indent=2)}
+
+LLM validator report JSON:
+{json.dumps(validation_report.to_json(), indent=2)}
+
+Deterministic SvgCheckTool report JSON:
+{json.dumps(tool_report.to_json(), indent=2)}
+
+Round index: {round_index}
+
+Current SVG:
+{artifact.svg}
+"""
+
+
+def _repair_router_prompt(
+    plan: IconPlan,
+    artifact: SvgArtifact,
+    validation_report: ValidationReport,
+    tool_report: ValidationReport,
+    taxonomy: FailureTaxonomy,
+    round_index: int,
+    collaboration_brief: str | None = None,
+) -> str:
+    selector_context = (
+        f"\nCollaborative selector repair brief:\n{collaboration_brief}\n"
+        if collaboration_brief
+        else "\nCollaborative selector repair brief: none.\n"
+    )
+    return f"""Choose the best repair route for the next SVG repair agent.
+Return one JSON object with this exact shape:
+{{
+  "route": "safety_rebuild|semantic_recompose|simplify_icon|layout_rebalance|minor_patch",
+  "strategy": "one concise repair strategy",
+  "ordered_actions": ["imperative action for the refiner"],
+  "refiner_brief": "one concise paragraph for the refiner",
+  "risk_notes": ["short risk note"]
+}}
+
+Route meanings:
+- safety_rebuild: unsafe, invalid, or non-renderable SVG must be rebuilt with allowed primitives.
+- semantic_recompose: SVG is safe but does not express the requested icon.
+- simplify_icon: SVG is too complex or unreadable at icon size.
+- layout_rebalance: composition, centering, scale, or visual hierarchy needs repair.
+- minor_patch: small localized fixes should preserve most of the current SVG.
+
+Rules:
+- Use taxonomy, validator issues, tool findings, and selector brief as evidence.
+- Make ordered_actions directly usable by the Refiner Agent.
+- Preserve the prompt semantics and safe SVG constraints.
+- Do not generate SVG code.
+- Do not include markdown.
+
+Icon plan JSON:
+{json.dumps(plan.to_json(), indent=2)}
+{selector_context}
+Failure taxonomy JSON:
+{json.dumps(taxonomy.to_json(), indent=2)}
+
+LLM validator report JSON:
+{json.dumps(validation_report.to_json(), indent=2)}
+
+Deterministic SvgCheckTool report JSON:
+{json.dumps(tool_report.to_json(), indent=2)}
+
+Round index: {round_index}
+
+Current SVG:
+{artifact.svg}
+"""
+
+
 def _refinement_prompt(
     plan: IconPlan,
     artifact: SvgArtifact,
@@ -1147,11 +1380,17 @@ def _refinement_prompt(
     tool_report: ValidationReport,
     round_index: int,
     collaboration_brief: str | None = None,
+    repair_route: RepairRoute | None = None,
 ) -> str:
     selector_context = (
         f"\nCollaborative selector repair brief:\n{collaboration_brief}\n"
         if collaboration_brief
         else ""
+    )
+    route_context = (
+        f"\nRepair router JSON:\n{json.dumps(repair_route.to_json(), indent=2)}\n"
+        if repair_route is not None
+        else "\nRepair router JSON: none.\n"
     )
     return f"""Repair the SVG below and return only one complete SVG document.
 Hard requirements:
@@ -1167,6 +1406,7 @@ Motifs: {", ".join(plan.motifs)}
 Layout: {plan.layout}
 Refinement round: {round_index}
 {selector_context}
+{route_context}
 
 LLM validator report JSON:
 {json.dumps(validation_report.to_json(), indent=2)}
@@ -1321,6 +1561,68 @@ def _coerce_validation_report(
         stage=artifact.stage,
         score=score,
         issues=tuple(issues),
+    )
+
+
+def _coerce_failure_taxonomy(
+    artifact: SvgArtifact,
+    data: dict[str, Any],
+    round_index: int,
+) -> FailureTaxonomy:
+    allowed_types = {
+        "syntax_safety",
+        "renderability",
+        "semantic_mismatch",
+        "visual_clarity",
+        "editability",
+        "constraint_violation",
+    }
+    failure_types = tuple(
+        item for item in _coerce_string_tuple(data.get("failure_types"), fallback=("constraint_violation",))
+        if item in allowed_types
+    )
+    priority = _coerce_text(data.get("priority"), fallback="medium").strip().lower()
+    if priority not in {"low", "medium", "high", "critical"}:
+        priority = "medium"
+    return FailureTaxonomy(
+        id=artifact.id,
+        stage=artifact.stage,
+        round_index=round_index,
+        failure_types=failure_types or ("constraint_violation",),
+        root_causes=_coerce_string_tuple(data.get("root_causes"), fallback=("validator-reported-blocking-issue",)),
+        evidence=_coerce_string_tuple(data.get("evidence"), fallback=("validation-report-and-svg-check",)),
+        priority=priority,
+        repair_goals=_coerce_string_tuple(data.get("repair_goals"), fallback=("produce-valid-safe-svg",)),
+    )
+
+
+def _coerce_repair_route(
+    artifact: SvgArtifact,
+    data: dict[str, Any],
+    round_index: int,
+) -> RepairRoute:
+    allowed_routes = {
+        "safety_rebuild",
+        "semantic_recompose",
+        "simplify_icon",
+        "layout_rebalance",
+        "minor_patch",
+    }
+    route = _coerce_text(data.get("route"), fallback="minor_patch").strip().lower()
+    if route not in allowed_routes:
+        route = "minor_patch"
+    return RepairRoute(
+        id=artifact.id,
+        stage=artifact.stage,
+        round_index=round_index,
+        route=route,
+        strategy=_coerce_text(data.get("strategy"), fallback="Repair blocking SVG validation issues while preserving the icon intent."),
+        ordered_actions=_coerce_string_tuple(
+            data.get("ordered_actions"),
+            fallback=("fix-blocking-validation-issues", "preserve-safe-editable-svg-constraints"),
+        ),
+        refiner_brief=_coerce_text(data.get("refiner_brief"), fallback="Return a complete repaired SVG that addresses the validator and tool issues."),
+        risk_notes=_coerce_string_tuple(data.get("risk_notes"), fallback=()),
     )
 
 
