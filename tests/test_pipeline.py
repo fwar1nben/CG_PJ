@@ -19,12 +19,14 @@ from svg_icon_agent.cli import main
 from svg_icon_agent.exporter import render_svg_to_png
 from svg_icon_agent.llm_agents import (
     ConsensusSelectorAgent,
+    FailureTaxonomyAgent,
     GoalManagerAgent,
     MemoryCuratorAgent,
     MultiCandidateGeneratorAgent,
     PlannerAgent,
     PromptRewriterAgent,
     RefinerAgent,
+    RepairRouterAgent,
     SemanticCriticAgent,
     SvgGeneratorAgent,
     SvgOptimizerAgent,
@@ -434,6 +436,13 @@ class OpenRouterAgentBoundaryTests(unittest.TestCase):
             if agent_classes:
                 self.assertEqual(path.name, "llm_agents.py", agent_classes)
 
+    def test_agent_class_names_are_provider_neutral(self) -> None:
+        text = Path("svg_icon_agent/llm_agents.py").read_text(encoding="utf-8")
+        agent_classes = [line for line in text.splitlines() if line.startswith("class ") and "Agent" in line]
+
+        self.assertTrue(agent_classes)
+        self.assertFalse(any("OpenRouter" in line for line in agent_classes))
+
     def test_all_agent_constructors_require_openrouter_client(self) -> None:
         for cls in (
             PlannerAgent,
@@ -447,6 +456,8 @@ class OpenRouterAgentBoundaryTests(unittest.TestCase):
             ConsensusSelectorAgent,
             SvgOptimizerAgent,
             ValidatorAgent,
+            FailureTaxonomyAgent,
+            RepairRouterAgent,
             RefinerAgent,
         ):
             annotations = inspect.get_annotations(cls.__init__, eval_str=True)
@@ -605,6 +616,90 @@ class OpenRouterPipelineTests(unittest.TestCase):
         self.assertEqual(refinements[0].rounds_used, 1)
         self.assertTrue(refinements[0].refined_report.is_valid)
         self.assertNotIn("<script", refinements[0].artifact.svg)
+
+    def test_refinement_skips_failure_routing_when_validator_accepts_svg(self) -> None:
+        item = load_prompts(PROMPT_PATH)[0]
+        plan = PlannerAgent(FakeOpenRouterClient([_plan_response(item)])).plan(item).plan
+        client = FakeOpenRouterClient([_validation_response(valid=True, score=100, issues=[])])
+
+        refinements = refine_artifacts(
+            [plan],
+            [SvgArtifact(id=plan.id, stage="baseline", svg=VALID_SVG)],
+            client=client,
+            model="openai/gpt-oss-120b:free",
+        )
+
+        self.assertEqual(len(client.calls), 1)
+        self.assertEqual(refinements[0].agent_statuses["validator"], "openrouter")
+        self.assertEqual(refinements[0].agent_statuses["failure_taxonomy"], "not-run")
+        self.assertEqual(refinements[0].agent_statuses["repair_router"], "not-run")
+        self.assertEqual(refinements[0].agent_statuses["refiner"], "not-run")
+        self.assertEqual(refinements[0].failure_taxonomies, ())
+        self.assertEqual(refinements[0].repair_routes, ())
+
+    def test_repair_router_and_refiner_prompts_include_failure_context(self) -> None:
+        item = load_prompts(PROMPT_PATH)[0]
+        plan = PlannerAgent(FakeOpenRouterClient([_plan_response(item)])).plan(item).plan
+        client = FakeOpenRouterClient(
+            [
+                _validation_response(
+                    valid=False,
+                    score=20,
+                    issues=[{"code": "unsafe-tag", "severity": "error", "message": "Remove script."}],
+                ),
+                _failure_taxonomy_response(),
+                _repair_route_response("safety_rebuild"),
+                _svg_response(VALID_SVG),
+                _validation_response(valid=True, score=100, issues=[]),
+            ]
+        )
+
+        refinements = refine_artifacts(
+            [plan],
+            [SvgArtifact(id=plan.id, stage="baseline", svg='<svg width="256"><script /></svg>')],
+            client=client,
+            model="openai/gpt-oss-120b:free",
+            collaboration_briefs={plan.id: "Preserve the selected cloud silhouette."},
+        )
+
+        router_prompt = client.calls[2]["messages"][1]["content"]
+        refiner_prompt = client.calls[3]["messages"][1]["content"]
+        self.assertIn("Failure taxonomy JSON", router_prompt)
+        self.assertIn("LLM validator report JSON", router_prompt)
+        self.assertIn("Deterministic SvgCheckTool report JSON", router_prompt)
+        self.assertIn("Preserve the selected cloud silhouette.", router_prompt)
+        self.assertIn("Repair router JSON", refiner_prompt)
+        self.assertIn("safety_rebuild", refiner_prompt)
+        self.assertIn("remove-script", refiner_prompt)
+        self.assertEqual(refinements[0].rounds_used, 1)
+
+    def test_failure_taxonomy_error_stops_without_local_fallback(self) -> None:
+        item = load_prompts(PROMPT_PATH)[0]
+        plan = PlannerAgent(FakeOpenRouterClient([_plan_response(item)])).plan(item).plan
+        client = FakeOpenRouterClient(
+            [
+                _validation_response(
+                    valid=False,
+                    score=20,
+                    issues=[{"code": "unsafe-tag", "severity": "error", "message": "Remove script."}],
+                ),
+                OpenRouterError("taxonomy failed", debug_payload={"stage": "failure-taxonomy"}),
+            ]
+        )
+
+        refinements = refine_artifacts(
+            [plan],
+            [SvgArtifact(id=plan.id, stage="baseline", svg='<svg width="256"><script /></svg>')],
+            client=client,
+            model="openai/gpt-oss-120b:free",
+        )
+
+        self.assertEqual(len(client.calls), 2)
+        self.assertEqual(refinements[0].agent_statuses["failure_taxonomy"], "openrouter-error")
+        self.assertEqual(refinements[0].agent_statuses["repair_router"], "not-run")
+        self.assertEqual(refinements[0].agent_statuses["refiner"], "not-run")
+        self.assertEqual(refinements[0].rounds_used, 0)
+        self.assertIn("taxonomy failed", refinements[0].errors[0])
 
     def test_collaboration_agents_generate_critique_and_select_candidates(self) -> None:
         item = load_prompts(PROMPT_PATH)[0]
@@ -940,6 +1035,16 @@ class WebAppTests(unittest.TestCase):
             self.assertEqual(data["trace"][0]["validator_backend"], "openrouter")
             self.assertIn(item.id, data["generation_goal"])
             self.assertIn(item.id, data["memory_context"])
+            workflow = {node["id"]: node["status"] for node in data["agent_workflow"]}
+            self.assertEqual(workflow["goal-manager"], "done")
+            self.assertEqual(workflow["svg-generator"], "done")
+            self.assertEqual(workflow["critic"], "skipped")
+            self.assertEqual(workflow["selector"], "skipped")
+            self.assertEqual(workflow["optimizer"], "skipped")
+            self.assertEqual(workflow["failure-taxonomy"], "skipped")
+            self.assertEqual(workflow["repair-router"], "skipped")
+            self.assertEqual(workflow["refiner"], "skipped")
+            self.assertEqual(workflow["exporter"], "done")
             self.assertEqual(
                 [event["stage"] for event in data["raw_events"]],
                 ["goal-manager", "planner", "svg", "validator", "memory-curator"],
@@ -1196,9 +1301,17 @@ class WebAppTests(unittest.TestCase):
             self.assertTrue(fake_client.rewrite_done.wait(timeout=2.0))
 
             live = client.get(f"/api/runs/{run_id}").get_json()
+            for _ in range(20):
+                workflow = {node["id"]: node["status"] for node in live["agent_workflow"]}
+                if workflow.get("planner") == "active":
+                    break
+                time.sleep(0.05)
+                live = client.get(f"/api/runs/{run_id}").get_json()
 
             self.assertEqual(live["prompt_rewrite"]["original_prompt"], prompt)
             self.assertEqual(live["prompt_rewrite"]["rewritten_prompt"], rewritten)
+            workflow = {node["id"]: node["status"] for node in live["agent_workflow"]}
+            self.assertEqual(workflow["planner"], "active")
             fake_client.allow_continue.set()
             for _ in range(20):
                 final = client.get(f"/api/runs/{run_id}").get_json()
