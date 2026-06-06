@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import threading
 import time
@@ -14,7 +15,7 @@ from typing import Any, Callable
 from flask import Flask, Response, jsonify, request, send_from_directory, url_for
 
 from svg_icon_agent.backends import create_openrouter_client
-from svg_icon_agent.exporter import export_artifacts
+from svg_icon_agent.exporter import export_artifacts, render_svg_to_png
 from svg_icon_agent.llm_agents import (
     CandidateCritique,
     LlmCritiqueResult,
@@ -119,7 +120,8 @@ def create_app(
 
     @app.get("/")
     def index() -> Response:
-        return Response(_INDEX_HTML, mimetype="text/html")
+        default_model = os.environ.get("OPENROUTER_MODEL", DEFAULT_OPENROUTER_MODEL)
+        return Response(_INDEX_HTML.replace("__MODEL__", default_model), mimetype="text/html")
 
     @app.post("/api/runs")
     def create_run() -> Response:
@@ -256,6 +258,43 @@ def create_app(
             thread.start()
         else:
             _execute_post_run_optimization(run, client_factory, feedback, use_llm_feedback)
+        return jsonify(_run_payload(run))
+
+    @app.post("/api/runs/<run_id>/edited-svg")
+    def save_edited_svg(run_id: str) -> Response:
+        if not _valid_run_id(run_id):
+            return jsonify({"error": "Invalid run id."}), 404
+        payload = request.get_json(silent=True) or {}
+        svg = str(payload.get("svg") or "").strip()
+        source = str(payload.get("source") or "refined").strip().lower()
+        if not svg:
+            return jsonify({"error": "Edited SVG must not be empty."}), 400
+        if source not in {"refined", "baseline", "selected"}:
+            return jsonify({"error": "Edited SVG source must be refined, baseline, or selected."}), 400
+        with lock:
+            run = runs.get(run_id)
+        if run is None:
+            return jsonify({"error": "Run is not loaded in this Web session."}), 404
+        if run.status in {"queued", "running", "optimizing"}:
+            return jsonify({"error": "Run is still busy."}), 409
+        if not run.output_dir.exists():
+            return jsonify({"error": "Run output directory is missing."}), 404
+
+        try:
+            _save_edited_svg(run, svg=svg, source=source)
+        except ValueError as exc:
+            return jsonify({"error": str(exc)}), 400
+        except Exception as exc:  # pragma: no cover - defensive boundary for rendering failures.
+            return jsonify({"error": f"Edited SVG could not be saved: {exc}"}), 400
+
+        run.updated_at = time.time()
+        run.events.append(
+            {
+                "elapsed": 0.0,
+                "message": f"Saved edited SVG from {source}.",
+                "stage": "editor",
+            }
+        )
         return jsonify(_run_payload(run))
 
     @app.get("/outputs/<run_id>/<path:filename>")
@@ -671,15 +710,21 @@ def _prompt_rewrite_payload(run: WebRun) -> dict[str, str] | None:
 
 
 def _artifact_payload(run: WebRun) -> dict[str, Any]:
-    artifact_id = _first_svg_id(run.output_dir / "refined") or _first_svg_id(run.output_dir / "baseline")
+    artifact_id = (
+        _first_svg_id(run.output_dir / "refined")
+        or _first_svg_id(run.output_dir / "baseline")
+        or _first_svg_id(run.output_dir / "selected")
+    )
     if not artifact_id:
         return {}
     files = {
         "selected_svg": Path("selected") / f"{artifact_id}.svg",
         "baseline_svg": Path("baseline") / f"{artifact_id}.svg",
         "refined_svg": Path("refined") / f"{artifact_id}.svg",
+        "edited_svg": Path("edited") / f"{artifact_id}.svg",
         "baseline_png": Path("png/baseline") / f"{artifact_id}.png",
         "refined_png": Path("png/refined") / f"{artifact_id}.png",
+        "edited_png": Path("png/edited") / f"{artifact_id}.png",
         "gallery": Path("gallery.html"),
     }
     artifacts: dict[str, Any] = {"id": artifact_id}
@@ -690,12 +735,21 @@ def _artifact_payload(run: WebRun) -> dict[str, Any]:
     selected_svg = run.output_dir / files["selected_svg"]
     baseline_svg = run.output_dir / files["baseline_svg"]
     refined_svg = run.output_dir / files["refined_svg"]
+    edited_svg = run.output_dir / files["edited_svg"]
     if selected_svg.exists():
         artifacts["selected_svg_text"] = selected_svg.read_text(encoding="utf-8")
     if baseline_svg.exists():
         artifacts["baseline_svg_text"] = baseline_svg.read_text(encoding="utf-8")
     if refined_svg.exists():
         artifacts["refined_svg_text"] = refined_svg.read_text(encoding="utf-8")
+    if edited_svg.exists():
+        edited_text = edited_svg.read_text(encoding="utf-8")
+        artifacts["edited_svg_text"] = edited_text
+        report = SvgCheckTool().check(SvgArtifact(id=artifact_id, stage="edited", svg=edited_text))
+        artifacts["edited_validation"] = report.to_json()
+        metadata = _read_json(run.output_dir / "edited" / f"{artifact_id}.json")
+        if isinstance(metadata, dict) and isinstance(metadata.get("source"), str):
+            artifacts["edited_source"] = metadata["source"]
     candidate_dir = run.output_dir / "candidates"
     candidates = []
     for path in sorted(candidate_dir.glob(f"{artifact_id}-candidate-*.svg")):
@@ -709,6 +763,44 @@ def _artifact_payload(run: WebRun) -> dict[str, Any]:
     if candidates:
         artifacts["candidates"] = candidates
     return artifacts
+
+
+def _save_edited_svg(run: WebRun, *, svg: str, source: str) -> None:
+    artifact_id = (
+        _first_svg_id(run.output_dir / "refined")
+        or _first_svg_id(run.output_dir / "baseline")
+        or _first_svg_id(run.output_dir / "selected")
+    )
+    if not artifact_id:
+        raise ValueError("Run does not contain an SVG artifact to edit.")
+    source_path = run.output_dir / source / f"{artifact_id}.svg"
+    if not source_path.exists():
+        raise ValueError(f"Run does not contain a {source} SVG artifact.")
+
+    report = SvgCheckTool().check(SvgArtifact(id=artifact_id, stage="edited", svg=svg))
+    errors = [issue for issue in report.issues if issue.severity == "error"]
+    if errors:
+        messages = "; ".join(f"{issue.code}: {issue.message}" for issue in errors)
+        raise ValueError(f"Edited SVG failed validation: {messages}")
+
+    edited_dir = run.output_dir / "edited"
+    png_dir = run.output_dir / "png" / "edited"
+    edited_dir.mkdir(parents=True, exist_ok=True)
+    png_dir.mkdir(parents=True, exist_ok=True)
+    tmp_png = png_dir / f"{artifact_id}.tmp.png"
+    png_path = png_dir / f"{artifact_id}.png"
+    try:
+        render_svg_to_png(svg, tmp_png)
+    except Exception:
+        tmp_png.unlink(missing_ok=True)
+        raise
+
+    (edited_dir / f"{artifact_id}.svg").write_text(svg, encoding="utf-8")
+    (edited_dir / f"{artifact_id}.json").write_text(
+        json.dumps({"source": source, "validation": report.to_json()}, indent=2),
+        encoding="utf-8",
+    )
+    tmp_png.replace(png_path)
 
 
 def _versioned_output_url(run: WebRun, relative: Path, path: Path) -> str:
@@ -1186,6 +1278,30 @@ _INDEX_HTML = """<!doctype html>
       font-size: 13px;
       line-height: 1.4;
     }
+    .error-banner {
+      border-color: #fecdca;
+      background: #fef3f2;
+      color: var(--bad);
+      padding: 14px 16px;
+      display: grid;
+      gap: 6px;
+      line-height: 1.45;
+    }
+    .error-banner[hidden] {
+      display: none;
+    }
+    .error-banner strong {
+      color: var(--bad);
+    }
+    .error-banner code {
+      background: #fff;
+      border: 1px solid #fecdca;
+      border-radius: 4px;
+      color: var(--ink);
+      padding: 1px 4px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 12px;
+    }
     .memory-list {
       display: grid;
       gap: 8px;
@@ -1214,6 +1330,53 @@ _INDEX_HTML = """<!doctype html>
       grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: 16px;
       padding: 16px;
+    }
+    .svg-editor {
+      padding: 16px;
+      display: grid;
+      gap: 12px;
+    }
+    .editor-toolbar {
+      display: grid;
+      grid-template-columns: minmax(180px, 1fr) auto auto auto;
+      gap: 10px;
+      align-items: end;
+    }
+    .editor-toolbar button.secondary {
+      background: #fff;
+      color: var(--ink);
+      border: 1px solid var(--line);
+    }
+    .editor-grid {
+      display: grid;
+      grid-template-columns: minmax(320px, 1.2fr) minmax(260px, .8fr);
+      gap: 12px;
+      min-height: 360px;
+    }
+    .editor-grid textarea {
+      min-height: 360px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 12px;
+      line-height: 1.5;
+      tab-size: 2;
+    }
+    .editor-preview-panel {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+      display: grid;
+      grid-template-rows: 36px minmax(0, 1fr) auto;
+      background: #fbfdff;
+    }
+    .editor-validation {
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 10px;
+      min-height: 42px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+      background: #fff;
     }
     .candidates {
       padding: 16px;
@@ -1443,6 +1606,8 @@ _INDEX_HTML = """<!doctype html>
       main { grid-template-columns: 1fr; }
       aside { min-height: auto; }
       .previews { grid-template-columns: 1fr; }
+      .editor-toolbar { grid-template-columns: 1fr 1fr; }
+      .editor-grid { grid-template-columns: 1fr; }
       .candidate-grid { grid-template-columns: 1fr; }
       .prompt-compare { grid-template-columns: 1fr; }
       .event { grid-template-columns: 64px 92px minmax(0, 1fr); }
@@ -1548,6 +1713,7 @@ _INDEX_HTML = """<!doctype html>
         </div>
         <div id="optimizerSummary" class="optimizer-summary">Waiting for SVG Optimizer Agent context</div>
       </section>
+      <section id="errorBanner" class="error-banner" hidden></section>
       <section class="prompt-panel">
         <h2>Goal, Memory, Prompt Rewrite</h2>
         <div class="prompt-compare">
@@ -1588,6 +1754,32 @@ _INDEX_HTML = """<!doctype html>
           <figcaption id="refinedCaption">Waiting for Validator and Refiner Agents</figcaption>
         </figure>
       </section>
+      <section class="svg-editor">
+        <h2>SVG Editor</h2>
+        <div class="editor-toolbar">
+          <div>
+            <label for="editorSource">Source</label>
+            <select id="editorSource" disabled>
+              <option value="">No SVG available</option>
+            </select>
+          </div>
+          <button id="resetSvgEditor" class="secondary" type="button" disabled>Reset</button>
+          <button id="validateSvgEditor" class="secondary" type="button" disabled>Validate</button>
+          <button id="saveSvgEditor" type="button" disabled>Save edited SVG</button>
+        </div>
+        <div class="editor-grid">
+          <div>
+            <label for="svgEditorText">SVG source</label>
+            <textarea id="svgEditorText" spellcheck="false" disabled></textarea>
+          </div>
+          <div class="editor-preview-panel">
+            <div class="figure-title">Live Preview</div>
+            <div id="svgEditorPreview" class="preview-box svg-preview"><div class="empty">No editable SVG</div></div>
+            <figcaption id="editedSvgCaption">No edited SVG saved</figcaption>
+          </div>
+        </div>
+        <div id="svgEditorStatus" class="editor-validation">Waiting for generated SVG</div>
+      </section>
       <section class="candidates">
         <h2>Candidate Drafts</h2>
         <div id="candidateGrid" class="candidate-grid"><div class="empty">No candidates yet</div></div>
@@ -1605,12 +1797,31 @@ _INDEX_HTML = """<!doctype html>
     </div>
   </main>
   <script>
-    const state = { runId: null, timer: null, activeTab: 'timeline' };
+    const state = {
+      runId: null,
+      timer: null,
+      activeTab: 'timeline',
+      latestRun: null,
+      artifacts: {},
+      editorDirty: false,
+      editorArtifactId: null,
+      editorUseSaved: false,
+      editorPreviewTimer: null
+    };
     const runButton = document.getElementById('runButton');
     const optimizeButton = document.getElementById('optimizeButton');
     const statusBox = document.getElementById('status');
     const runIdBox = document.getElementById('runId');
     const runStateBox = document.getElementById('runState');
+    const errorBanner = document.getElementById('errorBanner');
+    const editorSource = document.getElementById('editorSource');
+    const svgEditorText = document.getElementById('svgEditorText');
+    const svgEditorPreview = document.getElementById('svgEditorPreview');
+    const svgEditorStatus = document.getElementById('svgEditorStatus');
+    const resetSvgEditor = document.getElementById('resetSvgEditor');
+    const validateSvgEditor = document.getElementById('validateSvgEditor');
+    const saveSvgEditor = document.getElementById('saveSvgEditor');
+    const editedSvgCaption = document.getElementById('editedSvgCaption');
 
     document.querySelectorAll('.tab').forEach((button) => {
       button.addEventListener('click', () => {
@@ -1643,7 +1854,9 @@ _INDEX_HTML = """<!doctype html>
       };
       runButton.disabled = true;
       setStatus('Submitting run...', '');
+      hideErrorBanner();
       clearInterval(state.timer);
+      resetEditorState();
       const response = await fetch('/api/runs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1653,6 +1866,7 @@ _INDEX_HTML = """<!doctype html>
       if (!response.ok) {
         runButton.disabled = false;
         setStatus(data.error || 'Run could not start.', 'bad');
+        showErrorBanner(data.error || 'Run could not start.');
         return;
       }
       state.runId = data.id;
@@ -1677,6 +1891,7 @@ _INDEX_HTML = """<!doctype html>
       runButton.disabled = true;
       optimizeButton.disabled = true;
       setStatus('Submitting post-run optimization...', '');
+      hideErrorBanner();
       clearInterval(state.timer);
       const response = await fetch(`/api/runs/${state.runId}/optimize`, {
         method: 'POST',
@@ -1686,12 +1901,72 @@ _INDEX_HTML = """<!doctype html>
       const data = await response.json();
       if (!response.ok) {
         setStatus(data.error || 'Post-run optimization could not start.', 'bad');
+        showErrorBanner(data.error || 'Post-run optimization could not start.');
         runButton.disabled = false;
         optimizeButton.disabled = false;
         return;
       }
       renderRun(data);
       state.timer = setInterval(() => pollRun(), 1200);
+    });
+
+    editorSource.addEventListener('change', () => {
+      state.editorUseSaved = false;
+      state.editorDirty = false;
+      loadEditorSource(editorSource.value);
+      syncEditorButtons(state.latestRun || {});
+    });
+
+    svgEditorText.addEventListener('input', () => {
+      state.editorDirty = true;
+      state.editorUseSaved = false;
+      clearTimeout(state.editorPreviewTimer);
+      state.editorPreviewTimer = setTimeout(() => updateEditorPreview(), 120);
+      syncEditorButtons(state.latestRun || {});
+    });
+
+    resetSvgEditor.addEventListener('click', () => {
+      state.editorUseSaved = false;
+      state.editorDirty = false;
+      loadEditorSource(editorSource.value);
+      syncEditorButtons(state.latestRun || {});
+    });
+
+    validateSvgEditor.addEventListener('click', () => {
+      updateEditorPreview({ message: 'Local SVG preview validation passed.' });
+    });
+
+    saveSvgEditor.addEventListener('click', async () => {
+      if (!state.runId) {
+        setEditorValidation('Run an icon pipeline before saving edited SVG.', 'bad');
+        return;
+      }
+      const source = editorSource.value;
+      const svg = svgEditorText.value.trim();
+      if (!source || !svg) {
+        setEditorValidation('Choose a source and enter SVG text before saving.', 'bad');
+        return;
+      }
+      if (!updateEditorPreview({ message: 'Local SVG preview validation passed.' })) {
+        return;
+      }
+      saveSvgEditor.disabled = true;
+      setEditorValidation('Saving edited SVG...', '');
+      const response = await fetch(`/api/runs/${state.runId}/edited-svg`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ svg, source })
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        setEditorValidation(data.error || 'Edited SVG could not be saved.', 'bad');
+        syncEditorButtons(state.latestRun || {});
+        return;
+      }
+      state.editorDirty = false;
+      state.editorUseSaved = true;
+      renderRun(data);
+      setStatus('Edited SVG saved.', 'ok');
     });
 
     async function pollRun() {
@@ -1706,10 +1981,12 @@ _INDEX_HTML = """<!doctype html>
     }
 
     function renderRun(data) {
+      state.latestRun = data;
       runIdBox.textContent = data.id || 'No run';
       runStateBox.textContent = data.status || 'unknown';
       runStateBox.className = `pill ${data.status === 'completed' ? 'ok' : data.status === 'failed' ? 'bad' : ''}`;
       setStatus(data.error || statusText(data), data.status === 'failed' ? 'bad' : data.status === 'completed' ? 'ok' : '');
+      renderErrorBanner(data);
       renderTimeline(data.events || [], data.agent_workflow || []);
       renderJson('trace', data.trace || data.summary || {});
       renderJson('raw', data.raw_events || []);
@@ -1734,10 +2011,41 @@ _INDEX_HTML = """<!doctype html>
       statusBox.className = `status ${cls || ''}`;
     }
 
+    function renderErrorBanner(data) {
+      if (data.status === 'failed' || data.error) {
+        showErrorBanner(data.error || 'Run failed.');
+        return;
+      }
+      hideErrorBanner();
+    }
+
+    function showErrorBanner(error) {
+      const text = String(error || 'Run failed.');
+      const hint = text.includes('OPENROUTER_API_KEY')
+        ? 'Add OPENROUTER_API_KEY to .env or export it before starting web.py, then restart the Web UI.'
+        : 'Check the Flow and Raw LLM tabs for the failing stage details.';
+      errorBanner.hidden = false;
+      errorBanner.innerHTML = `
+        <strong>Run failed before SVG generation completed.</strong>
+        <div>${escapeHtml(text)}</div>
+        <div>${inlineCodeHint(hint)}</div>
+      `;
+    }
+
+    function hideErrorBanner() {
+      errorBanner.hidden = true;
+      errorBanner.innerHTML = '';
+    }
+
+    function inlineCodeHint(text) {
+      return escapeHtml(text).replace(/OPENROUTER_API_KEY|\\.env|web\\.py/g, (match) => `<code>${match}</code>`);
+    }
+
     function syncButtons(data) {
       const busy = ['queued', 'running', 'optimizing'].includes(data.status);
       runButton.disabled = busy;
       optimizeButton.disabled = busy || !data.id || !(data.artifacts && (data.artifacts.refined_svg_text || data.artifacts.baseline_svg_text));
+      syncEditorButtons(data);
     }
 
     function renderTimeline(events, workflow) {
@@ -1879,6 +2187,178 @@ _INDEX_HTML = """<!doctype html>
       selected.innerHTML = artifacts.selected_svg_text ? artifacts.selected_svg_text : '<div class="empty">No selected SVG</div>';
       baseline.innerHTML = artifacts.baseline_svg_text ? artifacts.baseline_svg_text : '<div class="empty">No baseline SVG</div>';
       refined.innerHTML = artifacts.refined_png_url ? `<img src="${artifacts.refined_png_url}" alt="Refined PNG">` : '<div class="empty">No refined PNG</div>';
+      renderSvgEditor(artifacts);
+    }
+
+    function resetEditorState() {
+      state.artifacts = {};
+      state.editorDirty = false;
+      state.editorArtifactId = null;
+      state.editorUseSaved = false;
+      clearTimeout(state.editorPreviewTimer);
+      editorSource.innerHTML = '<option value="">No SVG available</option>';
+      editorSource.value = '';
+      svgEditorText.value = '';
+      svgEditorPreview.innerHTML = '<div class="empty">No editable SVG</div>';
+      editedSvgCaption.textContent = 'No edited SVG saved';
+      setEditorValidation('Waiting for generated SVG', '');
+      syncEditorButtons({});
+    }
+
+    function renderSvgEditor(artifacts) {
+      state.artifacts = artifacts || {};
+      const sources = editableSources(state.artifacts);
+      const artifactId = state.artifacts.id || null;
+      const artifactChanged = state.editorArtifactId !== artifactId;
+      if (!sources.length) {
+        resetEditorState();
+        state.editorArtifactId = artifactId;
+        return;
+      }
+
+      const previousSource = editorSource.value;
+      editorSource.innerHTML = sources.map((source) => `
+        <option value="${escapeHtml(source.value)}">${escapeHtml(source.label)}</option>
+      `).join('');
+      const hasPreviousSource = sources.some((source) => source.value === previousSource);
+      editorSource.value = hasPreviousSource ? previousSource : sources[0].value;
+
+      if (artifactChanged || !state.editorDirty) {
+        state.editorArtifactId = artifactId;
+        if (state.editorUseSaved && state.artifacts.edited_svg_text) {
+          svgEditorText.value = state.artifacts.edited_svg_text;
+        } else {
+          svgEditorText.value = sourceText(state.artifacts, editorSource.value);
+        }
+        state.editorDirty = false;
+        updateEditorPreview({ keepStatus: true });
+      }
+
+      renderEditedCaption(state.artifacts);
+      if (!state.editorDirty) {
+        renderEditedValidation(state.artifacts);
+      }
+      syncEditorButtons(state.latestRun || {});
+    }
+
+    function editableSources(artifacts) {
+      return [
+        { value: 'refined', label: 'Refined SVG', text: artifacts.refined_svg_text },
+        { value: 'baseline', label: 'Optimized baseline SVG', text: artifacts.baseline_svg_text },
+        { value: 'selected', label: 'Selected SVG', text: artifacts.selected_svg_text }
+      ].filter((source) => source.text);
+    }
+
+    function sourceText(artifacts, source) {
+      if (source === 'refined') return artifacts.refined_svg_text || '';
+      if (source === 'baseline') return artifacts.baseline_svg_text || '';
+      if (source === 'selected') return artifacts.selected_svg_text || '';
+      return '';
+    }
+
+    function loadEditorSource(source) {
+      svgEditorText.value = sourceText(state.artifacts, source);
+      updateEditorPreview({ message: `Loaded ${source || 'source'} SVG.` });
+      renderEditedCaption(state.artifacts);
+    }
+
+    function renderEditedCaption(artifacts) {
+      if (artifacts.edited_svg_url) {
+        const source = artifacts.edited_source ? ` from ${artifacts.edited_source}` : '';
+        editedSvgCaption.textContent = `${artifacts.edited_svg_url}${source}`;
+        return;
+      }
+      editedSvgCaption.textContent = 'No edited SVG saved';
+    }
+
+    function renderEditedValidation(artifacts) {
+      const validation = artifacts.edited_validation;
+      if (!validation) {
+        setEditorValidation(`Loaded ${editorSource.value || 'source'} SVG. Live preview is ready.`, 'ok');
+        return;
+      }
+      const issues = Array.isArray(validation.issues) ? validation.issues : [];
+      if (!issues.length) {
+        setEditorValidation(`Saved edited SVG is valid. Score ${validation.score}.`, 'ok');
+        return;
+      }
+      const summary = issues.map((issue) => `${issue.severity}: ${issue.code} - ${issue.message}`).join('\\n');
+      setEditorValidation(summary, validation.is_valid ? 'warn' : 'bad');
+    }
+
+    function updateEditorPreview(options = {}) {
+      const svg = svgEditorText.value.trim();
+      if (!svg) {
+        svgEditorPreview.innerHTML = '<div class="empty">No editable SVG</div>';
+        setEditorValidation('SVG source is empty.', 'bad');
+        return false;
+      }
+      const result = validateSvgForPreview(svg);
+      if (!result.ok) {
+        svgEditorPreview.innerHTML = '<div class="empty">Preview paused until SVG is valid</div>';
+        setEditorValidation(result.errors.join('\\n'), 'bad');
+        return false;
+      }
+      svgEditorPreview.replaceChildren(document.importNode(result.root, true));
+      if (!options.keepStatus) {
+        setEditorValidation(options.message || 'Preview updated locally.', state.editorDirty ? 'warn' : 'ok');
+      }
+      return true;
+    }
+
+    function validateSvgForPreview(svg) {
+      const parser = new DOMParser();
+      const documentXml = parser.parseFromString(svg, 'image/svg+xml');
+      const errors = [];
+      if (documentXml.querySelector('parsererror')) {
+        errors.push('SVG XML is not parseable.');
+      }
+      const root = documentXml.documentElement;
+      if (!root || localSvgName(root) !== 'svg') {
+        errors.push('Root element must be <svg>.');
+      }
+      const disallowedTags = new Set(['script', 'foreignobject', 'image', 'iframe', 'audio', 'video', 'animate']);
+      if (root) {
+        [root, ...Array.from(root.querySelectorAll('*'))].forEach((element) => {
+          const tag = localSvgName(element);
+          if (disallowedTags.has(tag)) {
+            errors.push(`Disallowed tag <${tag}> found.`);
+          }
+          Array.from(element.attributes || []).forEach((attribute) => {
+            const name = localSvgName(attribute);
+            const value = String(attribute.value || '').toLowerCase();
+            if (name.startsWith('on')) {
+              errors.push(`Event handler attribute ${name} is not allowed.`);
+            }
+            if (name === 'href' || name === 'src') {
+              errors.push(`External reference attribute ${name} is not allowed.`);
+            }
+            if (value.includes('javascript:') || value.includes('url(')) {
+              errors.push(`Unsafe reference found in ${name}.`);
+            }
+          });
+        });
+      }
+      return { ok: errors.length === 0, errors, root };
+    }
+
+    function localSvgName(node) {
+      return String(node.localName || node.name || node.nodeName || '').toLowerCase();
+    }
+
+    function setEditorValidation(text, cls) {
+      svgEditorStatus.textContent = text;
+      svgEditorStatus.className = `editor-validation ${cls || ''}`;
+    }
+
+    function syncEditorButtons(data) {
+      const busy = ['queued', 'running', 'optimizing'].includes(data.status);
+      const hasSources = editableSources(state.artifacts || {}).length > 0;
+      editorSource.disabled = !hasSources;
+      svgEditorText.disabled = !hasSources;
+      resetSvgEditor.disabled = !hasSources;
+      validateSvgEditor.disabled = !hasSources;
+      saveSvgEditor.disabled = busy || !data.id || !hasSources || !svgEditorText.value.trim();
     }
 
     function renderPromptRewrite(data) {
@@ -1896,7 +2376,7 @@ _INDEX_HTML = """<!doctype html>
       const goals = data.generation_goal || {};
       const goal = artifactId && goals[artifactId] ? goals[artifactId] : null;
       document.getElementById('goalOutput').textContent = goal
-        ? `${goal.objective || ''}\nRequirements: ${(goal.visual_requirements || []).join(', ')}\nAccept: ${(goal.acceptance_criteria || []).join(', ')}\nAvoid: ${(goal.avoid_patterns || []).join(', ')}`
+        ? `${goal.objective || ''}\\nRequirements: ${(goal.visual_requirements || []).join(', ')}\\nAccept: ${(goal.acceptance_criteria || []).join(', ')}\\nAvoid: ${(goal.avoid_patterns || []).join(', ')}`
         : 'Waiting for Goal Manager Agent';
       const contexts = data.memory_context || {};
       const context = artifactId && contexts[artifactId] ? contexts[artifactId] : null;
@@ -1997,4 +2477,4 @@ _INDEX_HTML = """<!doctype html>
     }
   </script>
 </body>
-</html>""".replace("__MODEL__", DEFAULT_OPENROUTER_MODEL)
+</html>"""

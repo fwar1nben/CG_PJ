@@ -41,6 +41,7 @@ from svg_icon_agent.prompts import load_prompts, make_prompt_from_text
 from svg_icon_agent.refiner import refine_artifacts
 from svg_icon_agent.svg_check_tool import SvgCheckTool
 from svg_icon_agent.web_app import create_app
+from web import _load_dotenv
 
 
 PROMPT_PATH = Path("prompts/examples.json")
@@ -988,7 +989,37 @@ class CliTests(unittest.TestCase):
             self.assertNotIn("OPENROUTER_API_KEY", trace_text)
 
 
+class WebEntrypointTests(unittest.TestCase):
+    def test_web_entrypoint_loads_dotenv_without_overriding_existing_environment(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            env_path = Path(tmp) / ".env"
+            env_path.write_text(
+                "\n".join(
+                    [
+                        "OPENROUTER_API_KEY=from-file",
+                        'OPENROUTER_MODEL="model/from-file"',
+                        "export OPENROUTER_HTTP_REFERER=https://example.test",
+                        "IGNORED_LINE",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            with patch.dict(os.environ, {"OPENROUTER_API_KEY": "from-shell"}, clear=True):
+                _load_dotenv(env_path)
+
+                self.assertEqual(os.environ["OPENROUTER_API_KEY"], "from-shell")
+                self.assertEqual(os.environ["OPENROUTER_MODEL"], "model/from-file")
+                self.assertEqual(os.environ["OPENROUTER_HTTP_REFERER"], "https://example.test")
+
+
 class WebAppTests(unittest.TestCase):
+    def test_web_index_uses_openrouter_model_from_environment(self) -> None:
+        with patch.dict(os.environ, {"OPENROUTER_MODEL": "test/model-from-env"}, clear=False):
+            app = create_app(run_async=False)
+            html = app.test_client().get("/").get_data(as_text=True)
+
+        self.assertIn('input id="model" value="test/model-from-env"', html)
+
     def test_web_run_returns_artifacts_trace_and_raw_events(self) -> None:
         prompt = "a minimal cloud download icon with a clear arrow"
         item = make_prompt_from_text(prompt, source="web")
@@ -1062,6 +1093,24 @@ class WebAppTests(unittest.TestCase):
         self.assertIn("Directed Agent dependency graph", html)
         self.assertIn("semantic-critic", html)
         self.assertIn("svg-quality-critic", html)
+
+    def test_web_frontend_includes_prominent_openrouter_key_error_banner(self) -> None:
+        app = create_app(run_async=False)
+        html = app.test_client().get("/").get_data(as_text=True)
+
+        self.assertIn("errorBanner", html)
+        self.assertIn("Run failed before SVG generation completed.", html)
+        self.assertIn("OPENROUTER_API_KEY", html)
+        self.assertIn("Add OPENROUTER_API_KEY to .env", html)
+
+    def test_web_frontend_keeps_javascript_newline_escapes_parseable(self) -> None:
+        app = create_app(run_async=False)
+        html = app.test_client().get("/").get_data(as_text=True)
+
+        self.assertIn("join('\\n')", html)
+        self.assertIn("''}\\nRequirements:", html)
+        self.assertNotIn("join('\n')", html)
+        self.assertNotIn("''}\nRequirements:", html)
 
     def test_web_goal_and_memory_are_passed_to_llm_prompts(self) -> None:
         prompt = "a minimal cloud download icon with a clear arrow"
@@ -1289,6 +1338,162 @@ class WebAppTests(unittest.TestCase):
             self.assertFalse(data["trace"][0]["post_run_use_llm_feedback"])
             self.assertEqual(data["trace"][0]["post_run_optimizer_feedback_sources"], ["svg_check_tool", "manual_feedback"])
             self.assertTrue(any(event["stage"] == "post-run-optimizer" for event in data["raw_events"]))
+
+    def test_web_can_save_edited_svg_copy(self) -> None:
+        prompt = "a minimal cloud download icon with a clear arrow"
+        item = make_prompt_from_text(prompt, source="web")
+        fake_client = FakeOpenRouterClient(
+            [
+                _goal_response(),
+                _plan_response(item),
+                _svg_response(VALID_SVG),
+                _validation_response(valid=True, score=100, issues=[]),
+                _memory_curator_response(),
+            ]
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            app = create_app(
+                output_root=root,
+                client_factory=lambda model, timeout, retries: fake_client,
+                run_async=False,
+            )
+            client = app.test_client()
+
+            initial = client.post(
+                "/api/runs",
+                json={"prompt": prompt, "workflow": "single", "rewrite_prompt": False},
+            ).get_json()
+            run_id = initial["id"]
+            artifact_id = initial["artifacts"]["id"]
+            refined_text = (root / run_id / "refined" / f"{artifact_id}.svg").read_text(encoding="utf-8")
+            edited_svg = VALID_SVG.replace("Cloud Download", "Edited Cloud Download")
+
+            response = client.post(
+                f"/api/runs/{run_id}/edited-svg",
+                json={"svg": edited_svg, "source": "refined"},
+            )
+            data = response.get_json()
+            live = client.get(f"/api/runs/{run_id}").get_json()
+
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual((root / run_id / "edited" / f"{artifact_id}.svg").read_text(encoding="utf-8"), edited_svg)
+            self.assertTrue((root / run_id / "png" / "edited" / f"{artifact_id}.png").exists())
+            self.assertEqual((root / run_id / "refined" / f"{artifact_id}.svg").read_text(encoding="utf-8"), refined_text)
+            self.assertIn("Edited Cloud Download", data["artifacts"]["edited_svg_text"])
+            self.assertIn("edited_svg_url", data["artifacts"])
+            self.assertIn("edited_png_url", data["artifacts"])
+            self.assertEqual(data["artifacts"]["edited_source"], "refined")
+            self.assertTrue(data["artifacts"]["edited_validation"]["is_valid"])
+            self.assertIn("edited_svg_text", live["artifacts"])
+
+    def test_web_rejects_malformed_edited_svg(self) -> None:
+        prompt = "a minimal cloud download icon with a clear arrow"
+        item = make_prompt_from_text(prompt, source="web")
+        fake_client = FakeOpenRouterClient(
+            [
+                _goal_response(),
+                _plan_response(item),
+                _svg_response(VALID_SVG),
+                _validation_response(valid=True, score=100, issues=[]),
+                _memory_curator_response(),
+            ]
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            app = create_app(
+                output_root=root,
+                client_factory=lambda model, timeout, retries: fake_client,
+                run_async=False,
+            )
+            client = app.test_client()
+            initial = client.post(
+                "/api/runs",
+                json={"prompt": prompt, "workflow": "single", "rewrite_prompt": False},
+            ).get_json()
+            run_id = initial["id"]
+            artifact_id = initial["artifacts"]["id"]
+
+            response = client.post(
+                f"/api/runs/{run_id}/edited-svg",
+                json={"svg": '<svg width="256" height="256"><rect></svg>', "source": "refined"},
+            )
+            data = response.get_json()
+
+            self.assertEqual(response.status_code, 400)
+            self.assertIn("Edited SVG failed validation", data["error"])
+            self.assertFalse((root / run_id / "edited" / f"{artifact_id}.svg").exists())
+
+    def test_web_rejects_unsafe_edited_svg(self) -> None:
+        prompt = "a minimal cloud download icon with a clear arrow"
+        item = make_prompt_from_text(prompt, source="web")
+        fake_client = FakeOpenRouterClient(
+            [
+                _goal_response(),
+                _plan_response(item),
+                _svg_response(VALID_SVG),
+                _validation_response(valid=True, score=100, issues=[]),
+                _memory_curator_response(),
+            ]
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            app = create_app(
+                output_root=root,
+                client_factory=lambda model, timeout, retries: fake_client,
+                run_async=False,
+            )
+            client = app.test_client()
+            initial = client.post(
+                "/api/runs",
+                json={"prompt": prompt, "workflow": "single", "rewrite_prompt": False},
+            ).get_json()
+            run_id = initial["id"]
+            artifact_id = initial["artifacts"]["id"]
+            unsafe_svg = VALID_SVG.replace("</svg>", "<script>alert(1)</script></svg>")
+
+            response = client.post(
+                f"/api/runs/{run_id}/edited-svg",
+                json={"svg": unsafe_svg, "source": "refined"},
+            )
+            data = response.get_json()
+
+            self.assertEqual(response.status_code, 400)
+            self.assertIn("unsafe-tag", data["error"])
+            self.assertFalse((root / run_id / "edited" / f"{artifact_id}.svg").exists())
+
+    def test_web_rejects_edited_svg_while_run_is_busy(self) -> None:
+        prompt = "rocket"
+        fake_client = BlockingAfterRewriteClient(
+            "a minimal rocket launch icon with a centered upward silhouette and bold flame"
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            app = create_app(
+                output_root=Path(tmp),
+                client_factory=lambda model, timeout, retries: fake_client,
+                run_async=True,
+            )
+            client = app.test_client()
+            initial = client.post("/api/runs", json={"prompt": prompt, "workflow": "single"}).get_json()
+            run_id = initial["id"]
+            self.assertTrue(fake_client.rewrite_done.wait(timeout=2.0))
+            try:
+                response = client.post(
+                    f"/api/runs/{run_id}/edited-svg",
+                    json={"svg": VALID_SVG, "source": "refined"},
+                )
+            finally:
+                fake_client.allow_continue.set()
+
+            data = response.get_json()
+            self.assertEqual(response.status_code, 409)
+            self.assertEqual(data["error"], "Run is still busy.")
+            for _ in range(20):
+                final = client.get(f"/api/runs/{run_id}").get_json()
+                if final["status"] == "failed":
+                    break
+                time.sleep(0.05)
+            self.assertEqual(final["status"], "failed")
 
     def test_web_returns_rewritten_prompt_before_run_finishes(self) -> None:
         prompt = "rocket"

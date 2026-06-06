@@ -73,6 +73,12 @@ retrieved memories, rewritten prompt, and live Agent workflow in the Web UI.
 After a Web run completes, enter new advice in `Optimizer feedback` and click
 `Apply feedback` to run a post-run Optimizer pass on the latest SVG, followed by
 the existing Validator/Refiner/export steps.
+The Web UI also includes an `SVG Editor` panel for source-level editing of the
+generated SVG. It loads the final refined SVG first, falls back to the optimized
+baseline or selected SVG, updates a live preview as you type, and saves edits as
+separate `edited/` artifacts. Server-side saves run `SvgCheckTool`; error-level
+validation issues are rejected, warning-level issues are returned in the Web
+payload, and the original selected/baseline/refined outputs are preserved.
 The command prints realtime progress for each stage. If a model call fails, the
 error is logged; the system does not synthesize a local SVG fallback.
 
@@ -84,7 +90,9 @@ Useful output files:
 - `outputs/candidates/*.svg`: candidate drafts from collaborative mode.
 - `outputs/selected/*.svg`: raw Consensus Selector winners before optimization.
 - `outputs/refined/*.svg`: LLM-refined SVG icons.
+- `outputs/edited/*.svg`: Web UI SVG editor saves that preserve the generated originals.
 - `outputs/png/baseline/*.png` and `outputs/png/refined/*.png`: raster previews.
+- `outputs/png/edited/*.png`: raster previews for saved SVG editor copies.
 - `outputs/gallery.html`: side-by-side visual comparison for the report and slides.
 - `outputs/metrics.json`: aggregate validity and score improvements.
 - `outputs/generation_goal.json`: structured goals from the Goal Manager Agent.
