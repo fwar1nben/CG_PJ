@@ -177,6 +177,79 @@ function addCard(slide, x, y, w, h, title, body, accent = C.blue, fill = C.white
   });
 }
 
+function addEvidenceBox(slide, x, y, w, h, title, body, accent = C.purple) {
+  slide.addShape(pptx.ShapeType.roundRect, {
+    x,
+    y,
+    w,
+    h,
+    rectRadius: 0.06,
+    fill: { color: "F8FAFC" },
+    line: { color: accent, width: 1 },
+  });
+  slide.addText(title, {
+    x: x + 0.14,
+    y: y + 0.12,
+    w: w - 0.28,
+    h: 0.18,
+    fontFace: "PingFang SC",
+    fontSize: 7.7,
+    bold: true,
+    color: accent,
+    margin: 0,
+    fit: "shrink",
+  });
+  slide.addText(body, {
+    x: x + 0.14,
+    y: y + 0.36,
+    w: w - 0.28,
+    h: h - 0.42,
+    fontFace: "PingFang SC",
+    fontSize: 7.1,
+    color: C.ink,
+    valign: "top",
+    fit: "shrink",
+    margin: 0.01,
+    breakLine: false,
+  });
+}
+
+function addCodeSnippet(slide, x, y, w, h, title, code, accent = C.dark) {
+  slide.addShape(pptx.ShapeType.roundRect, {
+    x,
+    y,
+    w,
+    h,
+    rectRadius: 0.05,
+    fill: { color: "111827" },
+    line: { color: accent, width: 1 },
+  });
+  slide.addText(title, {
+    x: x + 0.12,
+    y: y + 0.11,
+    w: w - 0.24,
+    h: 0.16,
+    fontFace: "PingFang SC",
+    fontSize: 6.8,
+    bold: true,
+    color: "93C5FD",
+    margin: 0,
+    fit: "shrink",
+  });
+  slide.addText(code, {
+    x: x + 0.12,
+    y: y + 0.35,
+    w: w - 0.24,
+    h: h - 0.42,
+    fontFace: "Menlo",
+    fontSize: 6.1,
+    color: "F9FAFB",
+    fit: "shrink",
+    valign: "top",
+    margin: 0.01,
+  });
+}
+
 function addNode(slide, id, x, y, w, h, label, fill, line = C.blue, text = C.ink) {
   slide.addShape(pptx.ShapeType.roundRect, {
     x,
@@ -216,6 +289,47 @@ function arrow(slide, from, to, color = C.line) {
     h: y2 - y1,
     line: { color, width: 1.3, beginArrowType: "none", endArrowType: "triangle" },
   });
+}
+
+function addLineArrow(slide, x1, y1, x2, y2, color = C.line, dashed = false) {
+  slide.addShape(pptx.ShapeType.line, {
+    x: x1,
+    y: y1,
+    w: x2 - x1,
+    h: y2 - y1,
+    line: {
+      color,
+      width: 1.25,
+      beginArrowType: "none",
+      endArrowType: "triangle",
+      dash: dashed ? "dash" : "solid",
+    },
+  });
+}
+
+function addPlainLine(slide, x1, y1, x2, y2, color = C.line, dashed = false) {
+  slide.addShape(pptx.ShapeType.line, {
+    x: x1,
+    y: y1,
+    w: x2 - x1,
+    h: y2 - y1,
+    line: {
+      color,
+      width: 1.15,
+      beginArrowType: "none",
+      endArrowType: "none",
+      dash: dashed ? "dash" : "solid",
+    },
+  });
+}
+
+function addElbowArrow(slide, points, color = C.line, dashed = false) {
+  for (let i = 0; i < points.length - 2; i += 1) {
+    addPlainLine(slide, points[i][0], points[i][1], points[i + 1][0], points[i + 1][1], color, dashed);
+  }
+  const a = points[points.length - 2];
+  const b = points[points.length - 1];
+  addLineArrow(slide, a[0], a[1], b[0], b[1], color, dashed);
 }
 
 function addImageFrame(slide, imagePath, x, y, w, h, caption) {
@@ -344,9 +458,10 @@ function addNotes(slide, notes) {
   const slide = pptx.addSlide();
   addBg(slide);
   addTitle(slide, "问题与动机：图标不是只要“好看”", "普通文生图给的是像素图，课程项目更适合展示可检查、可编辑、可修复的图形生成流程。");
-  addCard(slide, 0.75, 1.42, 3.55, 4.45, "普通文生图的限制", "• 输出通常是 raster image\n• 结构不可编辑\n• 很难做安全检查\n• 失败原因不可追踪\n• 不适合展示图形规则约束", C.red, C.white);
-  addCard(slide, 4.85, 1.42, 3.55, 4.45, "选择 SVG 的原因", "• XML + 矢量 primitives\n• 可缩放、可编辑\n• 可检查 viewBox / 标签 / 属性\n• 可转 PNG 预览\n• 适合 UI icon 场景", C.green, C.white);
-  addCard(slide, 8.95, 1.42, 3.55, 4.45, "Agent 化的价值", "• 把创意生成拆成多个职责\n• 多候选 + 多角度 critique\n• 显式 diagnosis 和 repair route\n• 运行过程可视化\n• 结果与失败都可复盘", C.blue, C.white);
+  addCard(slide, 0.75, 1.28, 3.55, 3.75, "普通文生图的限制", "• 输出通常是 raster image\n• 结构不可编辑，难以复用\n• 无法直接检查 XML / viewBox\n• 失败后只能重新采样\n• 难展示 Agent 之间的决策证据", C.red, C.white);
+  addCard(slide, 4.85, 1.28, 3.55, 3.75, "选择 SVG 的原因", "• XML + 矢量 primitives\n• 可缩放、可编辑、可 diff\n• 可检查标签、属性和安全性\n• 可转 PNG 预览，保留源 SVG\n• 适合 UI icon 和课程图形约束", C.green, C.white);
+  addCard(slide, 8.95, 1.28, 3.55, 3.75, "Agent 化的价值", "• 将创意任务拆为明确职责\n• 多候选 + 多角度 critique\n• Selector 给出选择理由\n• Taxonomy / Router 给出修复路线\n• Web DAG 让过程可展示", C.blue, C.white);
+  addEvidenceBox(slide, 1.0, 5.28, 11.4, 0.78, "本项目定位", "不是训练大图像模型，而是实践“LLM Agent 协作 + SVG 规则工具 + 可编辑图形产物”。评分重点可落在生成式 AI workflow、Agent 组织方式、可解释修复和 demo 可复现性。", C.purple);
   addFooter(slide, 2);
   addNotes(slide, "这个项目的动机是：图标生成不只是生成一张好看的图片。对于计算机图形来说，我更希望输出本身是结构化的、可编辑的、可检查的。SVG 正好符合这个目标。相比直接让模型画图，这里把生成拆成多个 Agent：有人负责目标，有人负责规划，有人生成多个候选，有人评价，有人修复。这样可以展示一个完整的生成式 AI 工作流。");
 }
@@ -364,9 +479,10 @@ function addNotes(slide, notes) {
   addCard(slide, 8.18, 1.2, 3.9, 1.25, "Outputs", "selected SVG / baseline SVG / refined SVG / PNG previews / gallery / metrics / trace / raw responses", C.green, C.white);
   addImageFrame(slide, img("outputs/web/1780459805-0420b72d/png/baseline/a-steaming-cup-of-coffee.png"), 1.0, 3.0, 1.6, 1.75, "Baseline: 70 invalid");
   addImageFrame(slide, img("outputs/web/1780459805-0420b72d/png/refined/a-steaming-cup-of-coffee.png"), 3.0, 3.0, 1.6, 1.75, "Refined: 95 valid");
-  addCard(slide, 5.25, 3.0, 3.0, 1.75, "Web UI", "输入 prompt\n预览 SVG / PNG\n查看 DAG 当前节点\n展开 raw LLM response", C.purple, C.white);
-  addCard(slide, 8.7, 3.0, 3.0, 1.75, "CLI", "批量 prompts\n手动 --text\ncase-id 筛选\n可调模型、tokens、repair rounds", C.orange, C.white);
-  addBullets(slide, ["所有 Agent 使用 LLM，不再用本地模板冒充生成", "本地工具只做机械检查、渲染和文件导出", "失败时记录原因，不静默切回规则 fallback"], 1.05, 5.35, 11.2, 0.78, 10);
+  addCard(slide, 5.25, 3.0, 3.0, 1.75, "Web UI", "输入 prompt\n预览 SVG / PNG\n查看 DAG 当前节点\n展开 raw LLM response\n完成后可手动反馈再优化", C.purple, C.white);
+  addCard(slide, 8.7, 3.0, 3.0, 1.75, "CLI", "批量 prompts\n手动 --text\ncase-id 筛选\n可调模型、tokens、repair rounds\n支持 single/collaborative ablation", C.orange, C.white);
+  addCodeSnippet(slide, 1.05, 5.18, 5.2, 0.98, "输出日志文件", "generation_goal.json\nllm_trace.json\nllm_raw_responses.jsonl\nfailure_taxonomy.json / repair_routes.json", C.blue);
+  addEvidenceBox(slide, 6.55, 5.18, 5.55, 0.98, "可追踪性", "PPT 中只展示脱敏后的代表性摘录；完整模型返回保存在 llm_raw_responses.jsonl，便于定位 malformed JSON、空回复、repair 失败等问题。", C.green);
   addFooter(slide, 3);
   addNotes(slide, "系统目标是输入一句英文描述，输出一套完整的图标生成产物。除了 SVG 本身，还会导出 PNG 预览、HTML gallery、metrics、trace 和 raw response。这样答辩时不只是展示最后图片，也可以展示模型到底做了什么、哪个 Agent 参与了、失败是怎么被修复的。");
 }
@@ -377,37 +493,38 @@ function addNotes(slide, notes) {
   addBg(slide);
   addTitle(slide, "总体架构：不是线性流水线，而是 Agent DAG", "候选生成和双 Critic 存在并行关系；Repair 分支是条件触发。");
   const nodes = {};
-  nodes.mem = addNode(slide, "mem", 0.45, 3.0, 1.15, 0.55, "Memory\nTool", C.green2, C.green);
-  nodes.goal = addNode(slide, "goal", 1.85, 3.0, 1.15, 0.55, "Goal\nManager", C.blue2, C.blue);
-  nodes.rew = addNode(slide, "rew", 3.25, 3.0, 1.15, 0.55, "Prompt\nRewriter", C.blue2, C.blue);
-  nodes.plan = addNode(slide, "plan", 4.65, 3.0, 1.15, 0.55, "Planner", C.blue2, C.blue);
-  nodes.gen = addNode(slide, "gen", 6.05, 3.0, 1.3, 0.55, "Candidate\nGenerators", C.blue2, C.blue);
-  nodes.sem = addNode(slide, "sem", 7.75, 2.2, 1.2, 0.55, "Semantic\nCritic", C.orange2, C.orange);
-  nodes.qual = addNode(slide, "qual", 7.75, 3.8, 1.2, 0.55, "SVG Quality\nCritic", C.orange2, C.orange);
-  nodes.sel = addNode(slide, "sel", 9.35, 3.0, 1.15, 0.55, "Consensus\nSelector", C.blue2, C.blue);
-  nodes.opt = addNode(slide, "opt", 10.75, 3.0, 1.15, 0.55, "SVG\nOptimizer", C.blue2, C.blue);
-  nodes.val = addNode(slide, "val", 12.05, 3.0, 1.0, 0.55, "Validator", C.blue2, C.blue);
-  nodes.tax = addNode(slide, "tax", 9.35, 5.1, 1.15, 0.55, "Failure\nTaxonomy", C.orange2, C.orange);
-  nodes.rou = addNode(slide, "rou", 10.75, 5.1, 1.15, 0.55, "Repair\nRouter", C.orange2, C.orange);
-  nodes.ref = addNode(slide, "ref", 12.05, 5.1, 1.0, 0.55, "Refiner", C.orange2, C.orange);
-  nodes.exp = addNode(slide, "exp", 11.1, 1.2, 1.1, 0.55, "Exporter", C.green2, C.green);
-  nodes.cur = addNode(slide, "cur", 12.55, 1.2, 1.05, 0.55, "Memory\nCurator", C.blue2, C.blue);
-  ["mem","goal","rew","plan","gen"].slice(0,-1).forEach((k,i)=>arrow(slide,nodes[k],nodes[["mem","goal","rew","plan","gen"][i+1]]));
-  arrow(slide, nodes.gen, nodes.sem, C.orange);
-  arrow(slide, nodes.gen, nodes.qual, C.orange);
-  arrow(slide, nodes.sem, nodes.sel, C.orange);
-  arrow(slide, nodes.qual, nodes.sel, C.orange);
+  nodes.mem = addNode(slide, "mem", 0.35, 2.85, 1.05, 0.54, "Memory\nTool", C.green2, C.green);
+  nodes.goal = addNode(slide, "goal", 1.62, 2.85, 1.05, 0.54, "Goal\nManager", C.blue2, C.blue);
+  nodes.rew = addNode(slide, "rew", 2.9, 2.85, 1.1, 0.54, "Prompt\nRewriter", C.blue2, C.blue);
+  nodes.plan = addNode(slide, "plan", 4.22, 2.85, 0.96, 0.54, "Planner", C.blue2, C.blue);
+  nodes.gen = addNode(slide, "gen", 5.42, 2.85, 1.25, 0.54, "Candidate\nGenerators", C.blue2, C.blue);
+  nodes.sem = addNode(slide, "sem", 7.1, 1.72, 1.2, 0.54, "Semantic\nCritic", C.orange2, C.orange);
+  nodes.qual = addNode(slide, "qual", 7.1, 3.95, 1.2, 0.54, "SVG Quality\nCritic", C.orange2, C.orange);
+  nodes.sel = addNode(slide, "sel", 8.82, 2.85, 1.12, 0.54, "Consensus\nSelector", C.blue2, C.blue);
+  nodes.opt = addNode(slide, "opt", 10.18, 2.85, 1.05, 0.54, "SVG\nOptimizer", C.blue2, C.blue);
+  nodes.val = addNode(slide, "val", 11.45, 2.85, 0.95, 0.54, "Validator", C.blue2, C.blue);
+  nodes.exp = addNode(slide, "exp", 12.55, 2.85, 0.95, 0.54, "Exporter", C.green2, C.green);
+  nodes.tax = addNode(slide, "tax", 7.05, 5.22, 1.23, 0.54, "Failure\nTaxonomy", C.orange2, C.orange);
+  nodes.rou = addNode(slide, "rou", 8.75, 5.22, 1.18, 0.54, "Repair\nRouter", C.orange2, C.orange);
+  nodes.ref = addNode(slide, "ref", 10.35, 5.22, 1.0, 0.54, "Refiner", C.orange2, C.orange);
+  nodes.cur = addNode(slide, "cur", 12.55, 4.58, 0.95, 0.54, "Memory\nCurator", C.blue2, C.blue);
+  ["mem", "goal", "rew", "plan", "gen"].slice(0, -1).forEach((k, i) => arrow(slide, nodes[k], nodes[["mem", "goal", "rew", "plan", "gen"][i + 1]]));
+  addElbowArrow(slide, [[6.67, 3.12], [6.88, 3.12], [6.88, 1.99], [7.1, 1.99]], C.orange);
+  addElbowArrow(slide, [[6.67, 3.12], [6.88, 3.12], [6.88, 4.22], [7.1, 4.22]], C.orange);
+  addElbowArrow(slide, [[8.3, 1.99], [8.55, 1.99], [8.55, 3.12], [8.82, 3.12]], C.orange);
+  addElbowArrow(slide, [[8.3, 4.22], [8.55, 4.22], [8.55, 3.12], [8.82, 3.12]], C.orange);
   arrow(slide, nodes.sel, nodes.opt);
   arrow(slide, nodes.opt, nodes.val);
-  slide.addShape(pptx.ShapeType.line, { x: 12.55, y: 3.0, w: -2.05, h: 2.1, line: { color: C.orange, endArrowType: "triangle", width: 1.3 } });
+  arrow(slide, nodes.val, nodes.exp, C.green);
+  addElbowArrow(slide, [[11.92, 3.39], [11.92, 4.35], [6.7, 4.35], [6.7, 5.49], [7.05, 5.49]], C.orange, true);
   arrow(slide, nodes.tax, nodes.rou, C.orange);
   arrow(slide, nodes.rou, nodes.ref, C.orange);
-  slide.addShape(pptx.ShapeType.line, { x: 12.52, y: 5.1, w: 0, h: -1.55, line: { color: C.orange, endArrowType: "triangle", width: 1.3 } });
-  slide.addShape(pptx.ShapeType.line, { x: 12.55, y: 3.0, w: -0.45, h: -1.25, line: { color: C.green, endArrowType: "triangle", width: 1.3 } });
-  arrow(slide, nodes.exp, nodes.cur, C.green);
+  addElbowArrow(slide, [[11.35, 5.49], [12.05, 5.49], [12.05, 3.39]], C.orange, true);
+  addElbowArrow(slide, [[13.02, 3.39], [13.02, 4.58]], C.green);
   addChip(slide, "蓝色 = LLM Agent", 0.85, 1.28, C.blue, C.blue2);
   addChip(slide, "绿色 = 本地工具", 2.75, 1.28, C.green, C.green2);
   addChip(slide, "橙色 = 修复/评价", 4.65, 1.28, C.orange, C.orange2);
+  addEvidenceBox(slide, 6.65, 1.05, 5.85, 0.58, "依赖关系说明", "Generator 扇出到两个 Critic；Selector 汇总后进入 Optimizer。只有 Validator 判定有阻塞问题时，下方 repair branch 才执行。", C.purple);
   slide.addText("Web 前端会把同一张 DAG 按 waiting / active / done / skipped / error 高亮", {
     x: 0.85,
     y: 6.35,
@@ -428,18 +545,19 @@ function addNotes(slide, notes) {
   addBg(slide);
   addTitle(slide, "核心 Agent 职责：把大任务拆成可解释的小任务", "每个 Agent 负责一个语义明确的判断或生成动作。");
   const stages = [
-    ["目标与上下文", "Goal Manager\nPrompt Rewriter\nMemory Curator", "把用户输入、历史记忆和验收标准显式化", C.purple],
-    ["图标生成", "Planner\nMulti-Candidate Generator", "从意图到结构化 icon plan，再生成多个 SVG draft", C.blue],
-    ["评价与选择", "Semantic Critic\nSVG Quality Critic\nConsensus Selector", "分别看语义、SVG 质量，再给出 winner 和 repair brief", C.orange],
-    ["优化与修复", "SVG Optimizer\nValidator\nFailure Taxonomy\nRepair Router\nRefiner", "把反馈转化为完整 SVG 修改，并形成可审计修复路线", C.green],
+    ["目标与上下文", "Goal Manager\nPrompt Rewriter\nMemory Curator", "输入：prompt + goal + memory\n输出：GenerationGoal、rewritten prompt、可复用经验", C.purple],
+    ["图标生成", "Planner\nMulti-Candidate Generator", "输入：rewritten prompt + plan\n输出：3 个不同 SVG draft，全部走 SvgCheckTool", C.blue],
+    ["评价与选择", "Semantic Critic\nSVG Quality Critic\nConsensus Selector", "输入：候选 SVG + tool report\n输出：语义分、质量分、winner 与 repair brief", C.orange],
+    ["优化与修复", "SVG Optimizer\nValidator\nFailure Taxonomy\nRepair Router\nRefiner", "输入：反馈和失败证据\n输出：optimized baseline、taxonomy、route、refined SVG", C.green],
   ];
   stages.forEach((s, i) => {
     const x = 0.75 + i * 3.1;
     addCard(slide, x, 1.35, 2.65, 4.6, s[0], `${s[1]}\n\n${s[2]}`, s[3], C.white);
   });
+  addCodeSnippet(slide, 1.05, 5.86, 11.2, 0.55, "边界原则", "Agent = LLM call with explicit role; Tool = deterministic SVG parse / safety check / render / export. No local SVG template fallback.", C.dark);
   slide.addText("关键边界：Agent = 调用 LLM；Tool = 本地确定性检查/渲染/导出", {
     x: 1.05,
-    y: 6.25,
+    y: 6.48,
     w: 11.2,
     h: 0.32,
     fontFace: "PingFang SC",
@@ -458,46 +576,26 @@ function addNotes(slide, notes) {
   const slide = pptx.addSlide();
   addBg(slide);
   addTitle(slide, "协同生成：多候选 + 双 Critic + 共识选择", "同一个 prompt 不只生成一个 SVG，而是让模型团队先竞争再优化。");
-  addImageFrame(slide, img("outputs/web/1780456947-99997024/png/refined/a-minimal-rocket-launch-icon.png"), 0.85, 1.25, 1.45, 1.6, "Final");
-  slide.addText("Prompt\nminimal rocket launch icon", { x: 0.65, y: 3.18, w: 1.9, h: 0.45, fontFace: "Aptos", fontSize: 8.5, color: C.muted, align: "center", margin: 0, fit: "shrink" });
-  const c1 = addNode(slide, "c1", 3.1, 1.25, 1.55, 0.55, "Candidate 1\nTool 100", C.blue2, C.blue);
-  const c2 = addNode(slide, "c2", 3.1, 2.35, 1.55, 0.55, "Candidate 2\nTool 100", C.blue2, C.blue);
-  const c3 = addNode(slide, "c3", 3.1, 3.45, 1.55, 0.55, "Candidate 3\nTool 100", C.blue2, C.blue);
-  const sem = addNode(slide, "sem", 5.7, 1.65, 1.75, 0.7, "Semantic Critic\n85 / 92 / 70", C.orange2, C.orange);
-  const qual = addNode(slide, "qual", 5.7, 3.05, 1.75, 0.7, "SVG Quality Critic\n90 / 88 / 95", C.orange2, C.orange);
-  const sel = addNode(slide, "sel", 8.35, 2.35, 1.8, 0.72, "Consensus Selector\nWinner: Candidate 2", C.green2, C.green);
-  const opt = addNode(slide, "opt", 10.9, 2.35, 1.55, 0.72, "SVG Optimizer\n修正细节", C.purple2, C.purple);
-  [c1,c2,c3].forEach(c => {
-    arrow(slide,c,sem,C.orange);
-    arrow(slide,c,qual,C.orange);
-  });
-  arrow(slide,sem,sel,C.orange);
-  arrow(slide,qual,sel,C.orange);
-  arrow(slide,sel,opt,C.green);
-  slide.addText("Selector rationale：Candidate 2 在语义清晰度、动态火焰和小尺寸可读性之间最平衡。", {
-    x: 2.9,
-    y: 5.35,
-    w: 8.2,
-    h: 0.32,
-    fontFace: "PingFang SC",
-    fontSize: 10,
-    color: C.ink,
-    align: "center",
-    margin: 0,
-  });
-  slide.addText("这里的创新点不是“多调用几次模型”，而是让不同 Agent 给出可比较、可记录的理由。", {
-    x: 2.2,
-    y: 5.92,
-    w: 9.8,
-    h: 0.26,
-    fontFace: "PingFang SC",
-    fontSize: 9.5,
-    color: C.muted,
-    align: "center",
-    margin: 0,
-  });
+  addImageFrame(slide, img("outputs/web/1780456947-99997024/png/refined/a-minimal-rocket-launch-icon.png"), 0.72, 1.28, 1.3, 1.5, "Final rocket");
+  addCodeSnippet(slide, 0.58, 3.1, 2.3, 1.05, "Prompt Rewriter 原始摘录", "A minimal, upright rocket icon\ncentered on a 256x256 canvas...\ndynamic, layered flame...", C.blue);
+  const c1 = addNode(slide, "c1", 3.35, 1.25, 1.42, 0.52, "Candidate 1\nTool 100", C.blue2, C.blue);
+  const c2 = addNode(slide, "c2", 3.35, 2.25, 1.42, 0.52, "Candidate 2\nTool 100", C.blue2, C.blue);
+  const c3 = addNode(slide, "c3", 3.35, 3.25, 1.42, 0.52, "Candidate 3\nTool 100", C.blue2, C.blue);
+  const hub = addNode(slide, "hub", 5.35, 2.25, 0.75, 0.52, "score\nfan-out", "F8FAFC", C.line, C.muted);
+  const sem = addNode(slide, "sem", 6.75, 1.55, 1.75, 0.64, "Semantic Critic\n85 / 95 / 90", C.orange2, C.orange);
+  const qual = addNode(slide, "qual", 6.75, 3.0, 1.75, 0.64, "SVG Quality Critic\n85 / 95 / 90", C.orange2, C.orange);
+  const sel = addNode(slide, "sel", 9.2, 2.25, 1.8, 0.68, "Consensus Selector\nWinner: Candidate 2", C.green2, C.green);
+  const opt = addNode(slide, "opt", 11.55, 2.25, 1.3, 0.68, "SVG\nOptimizer", C.purple2, C.purple);
+  [c1, c2, c3].forEach((c) => addElbowArrow(slide, [[c.x + c.w, c.y + c.h / 2], [5.05, c.y + c.h / 2], [5.05, 2.51], [5.35, 2.51]], C.line));
+  addElbowArrow(slide, [[6.1, 2.51], [6.38, 2.51], [6.38, 1.87], [6.75, 1.87]], C.orange);
+  addElbowArrow(slide, [[6.1, 2.51], [6.38, 2.51], [6.38, 3.32], [6.75, 3.32]], C.orange);
+  addElbowArrow(slide, [[8.5, 1.87], [8.82, 1.87], [8.82, 2.59], [9.2, 2.59]], C.orange);
+  addElbowArrow(slide, [[8.5, 3.32], [8.82, 3.32], [8.82, 2.59], [9.2, 2.59]], C.orange);
+  arrow(slide, sel, opt, C.green);
+  addCodeSnippet(slide, 3.22, 4.6, 4.7, 0.95, "Selector 原始摘录", "Candidate-2 has the highest semantic\nand SVG quality scores (95 each),\nwith a strong rocket shape...", C.green);
+  addEvidenceBox(slide, 8.25, 4.6, 4.1, 0.95, "为什么这是协同？", "三个候选不是平均投票，而是由两个 Critic 给出可记录分数和理由，再由 Selector 写出 winner rationale 与 repair brief。", C.purple);
   addFooter(slide, 6);
-  addNotes(slide, "协同生成这一页用 rocket run 举例。模型先生成三个候选，三个候选都通过了本地工具检查，但语义和 SVG 质量分不同。Semantic Critic 更喜欢 candidate 2，SVG Quality Critic 更喜欢 candidate 3。Selector 最后选择 candidate 2，因为它在 prompt 对齐、动态火焰和小尺寸可读性上最平衡。这个过程让选择有理由，而不是随机取第一张。");
+  addNotes(slide, "协同生成这一页用 rocket run 举例。模型先生成三个候选，三个候选都通过了本地工具检查。这里我放了脱敏日志里的两段摘录：Prompt Rewriter 把原始 prompt 扩写成 256x256、居中火箭、分层动态火焰；Selector 的原始输出说明 candidate 2 同时有最高语义分和 SVG 质量分。这个过程让选择有证据，而不是随机取第一张。");
 }
 
 // Slide 7
@@ -505,21 +603,25 @@ function addNotes(slide, notes) {
   const slide = pptx.addSlide();
   addBg(slide);
   addTitle(slide, "自我修复：把失败拆成 taxonomy 和 route", "真实 coffee 案例：baseline 70 invalid，经一轮修复到 refined 95 valid。");
-  addImageFrame(slide, img("outputs/web/1780459805-0420b72d/png/baseline/a-steaming-cup-of-coffee.png"), 0.95, 1.35, 1.7, 1.95, "Baseline: 70 / invalid");
-  addImageFrame(slide, img("outputs/web/1780459805-0420b72d/png/refined/a-steaming-cup-of-coffee.png"), 10.75, 1.35, 1.7, 1.95, "Refined: 95 / valid");
-  const v = addNode(slide, "v", 3.1, 1.52, 1.5, 0.62, "Validator\n发现问题", C.red2, C.red);
-  const t = addNode(slide, "t", 5.1, 1.52, 1.65, 0.62, "Failure Taxonomy\n分类根因", C.orange2, C.orange);
-  const r = addNode(slide, "r", 7.25, 1.52, 1.55, 0.62, "Repair Router\n选择路线", C.orange2, C.orange);
-  const f = addNode(slide, "f", 9.3, 1.52, 1.25, 0.62, "Refiner\n重写 SVG", C.green2, C.green);
-  arrow(slide,v,t,C.orange);
-  arrow(slide,t,r,C.orange);
-  arrow(slide,r,f,C.orange);
-  slide.addShape(pptx.ShapeType.line, { x: 9.92, y: 2.14, w: -6.05, h: 1.65, line: { color: C.orange, width: 1.2, endArrowType: "triangle", dash: "dash" } });
-  addCard(slide, 1.05, 4.0, 3.1, 1.45, "Taxonomy", "semantic_mismatch\nconstraint_violation\n\n根因：蓝色杯体不符合咖啡色 palette；steam opacity 违反约束", C.orange, C.white);
-  addCard(slide, 4.55, 4.0, 3.1, 1.45, "Route", "semantic_recompose\n\n策略：替换为 brown / cream palette，移除 opacity，更新 metadata", C.purple, C.white);
-  addCard(slide, 8.05, 4.0, 3.1, 1.45, "Result", "1 repair round\nbaseline_valid 0 -> refined_valid 1\nscore 70 -> 95", C.green, C.white);
+  addImageFrame(slide, img("outputs/web/1780459805-0420b72d/png/baseline/a-steaming-cup-of-coffee.png"), 0.65, 1.25, 1.45, 1.65, "Baseline: 70 invalid");
+  addImageFrame(slide, img("outputs/web/1780459805-0420b72d/png/refined/a-steaming-cup-of-coffee.png"), 11.2, 1.25, 1.45, 1.65, "Refined: 95 valid");
+  const v = addNode(slide, "v", 2.55, 1.42, 1.35, 0.6, "Validator\ninvalid", C.red2, C.red);
+  const t = addNode(slide, "t", 4.45, 1.42, 1.55, 0.6, "Failure Taxonomy\n分类根因", C.orange2, C.orange);
+  const r = addNode(slide, "r", 6.55, 1.42, 1.45, 0.6, "Repair Router\n选择路线", C.orange2, C.orange);
+  const f = addNode(slide, "f", 8.55, 1.42, 1.25, 0.6, "Refiner\n完整 SVG", C.green2, C.green);
+  const ok = addNode(slide, "ok", 10.15, 1.42, 0.78, 0.6, "valid", C.green2, C.green);
+  arrow(slide, v, t, C.orange);
+  arrow(slide, t, r, C.orange);
+  arrow(slide, r, f, C.orange);
+  arrow(slide, f, ok, C.green);
+  addElbowArrow(slide, [[9.18, 2.02], [9.18, 2.92], [3.22, 2.92], [3.22, 2.02]], C.orange, true);
+  slide.addText("re-validate", { x: 5.6, y: 2.72, w: 1.2, h: 0.18, fontFace: "Aptos", fontSize: 7, color: C.orange, align: "center", margin: 0 });
+  addCodeSnippet(slide, 0.95, 3.55, 3.7, 1.35, "failure_taxonomy.json 摘录", 'failure_types: [\n  "semantic_mismatch",\n  "constraint_violation"\n]\nroot_cause: blue cup != coffee palette', C.orange);
+  addCodeSnippet(slide, 4.95, 3.55, 3.7, 1.35, "repair_routes.json 摘录", 'route: "semantic_recompose"\nordered_actions:\n- replace #4a90d9 -> #6F4E37\n- remove opacity from steam lines', C.purple);
+  addCard(slide, 8.95, 3.55, 3.25, 1.35, "Result", "1 repair round\nbaseline_valid 0 -> refined_valid 1\nscore 70 -> 95\n完整 SVG 重新导出 PNG", C.green, C.white);
+  addEvidenceBox(slide, 1.0, 5.45, 11.2, 0.55, "日志证据说明", "这些片段来自脱敏后的 failure_taxonomy.json 与 repair_routes.json；完整模型调用、usage 和响应保存在 llm_raw_responses.jsonl / llm_trace.json。", C.blue);
   addFooter(slide, 7);
-  addNotes(slide, "自我修复机制用 coffee 案例说明。优化后的 baseline 因为颜色不符合计划，被 Validator 判为 invalid，分数 70。Failure Taxonomy 把问题归类为 semantic mismatch 和 constraint violation，Repair Router 选择 semantic recompose 路线，要求把蓝色杯体替换回咖啡色 palette，并去掉 opacity。Refiner 根据这个 brief 返回完整 SVG，最后验证分数提升到 95。");
+  addNotes(slide, "自我修复机制用 coffee 案例说明。优化后的 baseline 因为颜色不符合计划，被 Validator 判为 invalid，分数 70。PPT 中放了日志摘录：Failure Taxonomy 把问题归类为 semantic mismatch 和 constraint violation；Repair Router 选择 semantic_recompose，并给出替换颜色、移除 opacity 的 ordered actions。Refiner 根据这个 brief 返回完整 SVG，然后 re-validate，最后分数提升到 95。");
 }
 
 // Slide 8
@@ -527,12 +629,14 @@ function addNotes(slide, notes) {
   const slide = pptx.addSlide();
   addBg(slide);
   addTitle(slide, "目标管理与记忆：让系统从历史经验中生成", "RAG 记忆来自本地历史 runs，不使用外部数据集，也不保存 API key。");
-  addCard(slide, 0.9, 1.35, 3.45, 4.25, "GenerationGoal", "objective\nvisual_requirements\nconstraints\nacceptance_criteria\nstyle_preferences\navoid_patterns", C.blue, C.white);
-  addCard(slide, 4.95, 1.35, 3.45, 4.25, "Memory Retrieval", "检索相似历史 runs\n读取 success_patterns\n读取 failure_patterns\n读取 user_feedback\n返回 top-k snippets", C.purple, C.white);
-  addCard(slide, 9.0, 1.35, 3.45, 4.25, "Memory Curator", "run 结束后总结经验\n保存可复用设计策略\n保存失败模式\n为下一次 prompt 提供上下文", C.green, C.white);
+  addCard(slide, 0.9, 1.25, 3.45, 3.05, "GenerationGoal", "objective\nvisual_requirements\nconstraints\nacceptance_criteria\nstyle_preferences\navoid_patterns\n\n作用：把“好图标”变成可验证标准", C.blue, C.white);
+  addCard(slide, 4.95, 1.25, 3.45, 3.05, "Memory Retrieval", "检索相似历史 runs\n读取 success_patterns\n读取 failure_patterns\n读取 user_feedback\n返回 top-k snippets\n\n作用：让新 prompt 继承历史经验", C.purple, C.white);
+  addCard(slide, 9.0, 1.25, 3.45, 3.05, "Memory Curator", "run 结束后总结经验\n保存可复用设计策略\n保存失败模式\n记录 score / tags\n\n作用：形成轻量长期记忆", C.green, C.white);
+  addCodeSnippet(slide, 1.0, 4.62, 5.4, 0.9, "GenerationGoal 摘录", "objective: 256x256 rocket launch icon\nacceptance: centered rocket, layered flame\navoid: static-uniform flame shapes", C.blue);
+  addCodeSnippet(slide, 6.75, 4.62, 5.4, 0.9, "Memory 摘录", "success_patterns:\n- centered-upright-rocket\n- layered-sweeping-flame-curves\nuser_feedback: simplify-window", C.purple);
   slide.addText("例：rocket 相关记忆会提醒“居中火箭 + 分层扫掠火焰 + 简化圆形窗口”。", {
     x: 1.3,
-    y: 6.05,
+    y: 6.08,
     w: 10.7,
     h: 0.28,
     fontFace: "PingFang SC",
@@ -555,10 +659,11 @@ function addNotes(slide, notes) {
   addImageFrame(slide, img("outputs/web/1780457165-766f9cd2/png/refined/a-minimal-white-rocket-launch.png"), 2.25, 1.25, 1.35, 1.52, "White rocket 100");
   addImageFrame(slide, img("outputs/web/1780457342-7e0b912c/png/refined/a-cute-gray-cat-smiling.png"), 3.75, 1.25, 1.35, 1.52, "Cat 100");
   addImageFrame(slide, img("outputs/web/1780459805-0420b72d/png/refined/a-steaming-cup-of-coffee.png"), 5.25, 1.25, 1.35, 1.52, "Coffee 95");
-  addCard(slide, 7.15, 1.18, 5.25, 1.9, "主结果", "Baseline valid: 3 / 4\nRefined valid: 4 / 4\nAverage score: 91.25 -> 97.50\nMax repair rounds: 1", C.green, C.white);
-  addCard(slide, 0.85, 3.65, 3.45, 1.55, "候选生成", "每个 prompt 生成 3 个候选\n共 12 个 candidate SVG\nSelector 选出 4 个 winner", C.blue, C.white);
-  addCard(slide, 4.95, 3.65, 3.45, 1.55, "修复收益", "Coffee case: 70 -> 95\n后续 dog case: 65 -> 100\n说明 repair loop 能处理真实失败", C.orange, C.white);
-  addCard(slide, 9.05, 3.65, 3.0, 1.55, "可展示性", "SVG / PNG / gallery\nllm_trace.json\nraw responses\nDAG runtime states", C.purple, C.white);
+  addCard(slide, 7.15, 1.18, 5.25, 1.9, "主结果", "Baseline valid: 3 / 4\nRefined valid: 4 / 4\nAverage score: 91.25 -> 97.50\nMax repair rounds: 1\nFinal validity: 100%", C.green, C.white);
+  addCard(slide, 0.85, 3.55, 3.45, 1.72, "候选生成", "每个 prompt 生成 3 个候选\n共 12 个 candidate SVG\nSelector 选出 4 个 winner\n每个 winner 都有 rationale", C.blue, C.white);
+  addCard(slide, 4.95, 3.55, 3.45, 1.72, "修复收益", "Coffee case: 70 -> 95\n后续 dog case: 65 -> 100\nCloud 多轮 repair 提升\n说明 repair loop 能处理真实失败", C.orange, C.white);
+  addCard(slide, 9.05, 3.55, 3.0, 1.72, "可展示性", "SVG / PNG / gallery\nllm_trace.json\nllm_raw_responses.jsonl\nDAG runtime states", C.purple, C.white);
+  addCodeSnippet(slide, 1.05, 5.55, 11.2, 0.48, "统计口径", "Report snapshot = 4 main Web runs; later outputs/web runs are used only as demo evidence, not mixed into the formal aggregate.", C.dark);
   slide.addText("说明：正式统计采用报告中的 4-run 快照；后续 outputs/web 中还有更多运行，可作为 demo 素材。", {
     x: 1.0,
     y: 6.02,
@@ -579,9 +684,9 @@ function addNotes(slide, notes) {
   const slide = pptx.addSlide();
   addBg(slide);
   addTitle(slide, "总结：可编辑图形 + 可解释 Agent 协作", "项目价值不只是生成图标，而是把生成、评价、修复、记忆做成可追踪系统。");
-  addCard(slide, 0.85, 1.35, 3.65, 4.0, "创新点", "• LLM-backed Agent DAG\n• 多候选竞争 + 双 Critic\n• Failure taxonomy + Repair router\n• 本地历史 RAG memory\n• Web runtime 可视化", C.blue, C.white);
-  addCard(slide, 4.85, 1.35, 3.65, 4.0, "局限性", "• 免费模型速度和稳定性有限\n• SVG renderer 支持的是实用子集\n• 视觉质量评价仍偏规则化\n• 实验规模还可以扩大", C.orange, C.white);
-  addCard(slide, 8.85, 1.35, 3.65, 4.0, "下一步", "• 更大 prompt set\n• 人类偏好评价\n• 更强 perceptual critic\n• 消融实验：single vs collaborative\n• 更细的 SVG grammar", C.green, C.white);
+  addCard(slide, 0.85, 1.25, 3.65, 4.1, "创新点", "• LLM-backed Agent DAG\n• 多候选竞争 + 双 Critic\n• Failure taxonomy + Repair router\n• 本地历史 RAG memory\n• Web runtime 可视化\n• 脱敏 raw response 支持 debug", C.blue, C.white);
+  addCard(slide, 4.85, 1.25, 3.65, 4.1, "局限性", "• 免费模型速度和稳定性有限\n• SVG renderer 支持实用子集\n• 视觉质量评价仍偏规则化\n• 实验规模还可以扩大\n• raw LLM 输出偶尔 malformed，需要 retry", C.orange, C.white);
+  addCard(slide, 8.85, 1.25, 3.65, 4.1, "下一步", "• 更大 prompt set\n• 人类偏好评价\n• 更强 perceptual critic\n• 消融实验：single vs collaborative\n• 更细的 SVG grammar\n• 对 failure route 做量化评估", C.green, C.white);
   slide.addText("Takeaway: 这是一个面向 SVG 图标生成的“LLM Agent 协作 + 规则工具保底 + 记忆自改进”系统。", {
     x: 1.1,
     y: 6.0,
