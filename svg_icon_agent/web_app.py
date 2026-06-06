@@ -1239,7 +1239,8 @@ _INDEX_HTML = """<!doctype html>
     }
     .workspace {
       display: grid;
-      grid-template-rows: auto minmax(360px, 1fr) auto minmax(260px, 42vh);
+      grid-auto-rows: auto;
+      align-content: start;
       gap: 16px;
     }
     .topbar {
@@ -1334,7 +1335,9 @@ _INDEX_HTML = """<!doctype html>
     .svg-editor {
       padding: 16px;
       display: grid;
+      grid-template-rows: auto auto minmax(520px, 62vh) auto;
       gap: 12px;
+      min-height: 680px;
     }
     .editor-toolbar {
       display: grid;
@@ -1351,10 +1354,18 @@ _INDEX_HTML = """<!doctype html>
       display: grid;
       grid-template-columns: minmax(320px, 1.2fr) minmax(260px, .8fr);
       gap: 12px;
-      min-height: 360px;
+      min-height: 0;
+    }
+    .editor-grid > div:first-child {
+      min-height: 0;
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
     }
     .editor-grid textarea {
-      min-height: 360px;
+      min-height: 0;
+      height: 100%;
+      overflow: auto;
+      resize: none;
       font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
       font-size: 12px;
       line-height: 1.5;
@@ -1367,6 +1378,10 @@ _INDEX_HTML = """<!doctype html>
       display: grid;
       grid-template-rows: 36px minmax(0, 1fr) auto;
       background: #fbfdff;
+      min-height: 0;
+    }
+    .editor-preview-panel .preview-box {
+      overflow: auto;
     }
     .editor-validation {
       border: 1px solid var(--line);
@@ -1377,6 +1392,7 @@ _INDEX_HTML = """<!doctype html>
       font-size: 13px;
       line-height: 1.45;
       background: #fff;
+      white-space: pre-wrap;
     }
     .candidates {
       padding: 16px;
@@ -1606,6 +1622,10 @@ _INDEX_HTML = """<!doctype html>
       main { grid-template-columns: 1fr; }
       aside { min-height: auto; }
       .previews { grid-template-columns: 1fr; }
+      .svg-editor {
+        min-height: 620px;
+        grid-template-rows: auto auto minmax(460px, 65vh) auto;
+      }
       .editor-toolbar { grid-template-columns: 1fr 1fr; }
       .editor-grid { grid-template-columns: 1fr; }
       .candidate-grid { grid-template-columns: 1fr; }
