@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <title>Cloud download icon</title>
+  <desc>A compact cloud silhouette with a large downward arrow in the center</desc>
+  <path d="M80 160 c0-30 15-50 38-58-3-8-5-17-5-26 0-28 22-50 50-50 20 0 37 12 44 28 5-2 10-3 16-3 28 0 50 22 50 50 0 8-2 15-5 22 20 10 34 30 34 56 0 33-28 60-62 60h-160c-30 0-55-23-55-52 0-26 19-48 45-52z" fill="#5b9bd5"/>
+  <polygon points="128,110 128,170 108,150 102,156 128,180 154,156 148,150 128,170 128,110" fill="#ffffff"/>
+</svg>

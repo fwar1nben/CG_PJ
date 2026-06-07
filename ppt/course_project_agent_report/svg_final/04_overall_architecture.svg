@@ -1,0 +1,173 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">
+  <rect x="0" y="0" width="1280" height="720" fill="#F8FAFC" />
+  <text x="56" y="72" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="36" font-weight="800" fill="#111827">总体架构：RAG 记忆 + 多 Agent 生成/验证/修复</text>
+  <path fill="#DBEAFE" d="M64,96 H1216 A8,8 0 0 1 1224,104 V140 A8,8 0 0 1 1216,148 H64 A8,8 0 0 1 56,140 V104 A8,8 0 0 1 64,96 Z" />
+  <text x="78" y="129" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="18" fill="#111827">本地历史运行先作为 RAG 上下文进入 Goal Manager，随后 Agent 链路逐步收窄目标、生成候选、验证并修复 SVG。</text>
+
+  <g id="legend">
+    <path fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1" d="M938,164 H1186 A8,8 0 0 1 1194,172 V198 A8,8 0 0 1 1186,206 H938 A8,8 0 0 1 930,198 V172 A8,8 0 0 1 938,164 Z" />
+    <path fill="#DBEAFE" d="M951,178 H963 A3,3 0 0 1 966,181 V189 A3,3 0 0 1 963,192 H951 A3,3 0 0 1 948,189 V181 A3,3 0 0 1 951,178 Z" /><text x="974" y="190" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="13" fill="#64748B">LLM Agent</text>
+    <path fill="#CCFBF1" d="M1051,178 H1063 A3,3 0 0 1 1066,181 V189 A3,3 0 0 1 1063,192 H1051 A3,3 0 0 1 1048,189 V181 A3,3 0 0 1 1051,178 Z" /><text x="1074" y="190" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="13" fill="#64748B">Tool</text>
+  </g>
+
+  <g id="rag-column">
+    <path fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1.2" d="M78,186 H280 A12,12 0 0 1 292,198 V528 A12,12 0 0 1 280,540 H78 A12,12 0 0 1 66,528 V198 A12,12 0 0 1 78,186 Z" />
+    <text x="96" y="226" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="22" font-weight="800" fill="#0F766E">RAG 输入</text>
+    <path fill="#CCFBF1" d="M106,258 H252 A10,10 0 0 1 262,268 V326 A10,10 0 0 1 252,336 H106 A10,10 0 0 1 96,326 V268 A10,10 0 0 1 106,258 Z" />
+    
+  <g transform="translate(112.0, 278.0) scale(1.4166666666666667)" fill="none" stroke="#0F766E" stroke-width="2">
+    <path d="M4 6a8 3 0 1 0 16 0a8 3 0 1 0 -16 0" />
+    <path d="M4 6v6a8 3 0 0 0 16 0v-6" />
+    <path d="M4 12v6a8 3 0 0 0 16 0v-6" />
+  </g>
+    <text x="156" y="288" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="16" font-weight="700" fill="#111827">Memory</text>
+    <text x="156" y="314" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="14" fill="#64748B">历史运行记录</text>
+    <path fill="#CCFBF1" d="M106,370 H252 A10,10 0 0 1 262,380 V438 A10,10 0 0 1 252,448 H106 A10,10 0 0 1 96,438 V380 A10,10 0 0 1 106,370 Z" />
+    
+  <g transform="translate(112.0, 390.0) scale(1.4166666666666667)" fill="none" stroke="#0F766E" stroke-width="2">
+    <path d="M3 10a7 7 0 1 0 14 0a7 7 0 1 0 -14 0" />
+    <path d="M21 21l-6 -6" />
+  </g>
+    <text x="156" y="400" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="16" font-weight="700" fill="#111827">Top-k Retrieve</text>
+    <text x="156" y="426" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="14" fill="#64748B">BM25 相似经验</text>
+  </g>
+
+  <g id="main-chain">
+    <path fill="#DBEAFE" stroke="#1D4ED8" stroke-width="1.3" d="M352,186 H466 A10,10 0 0 1 476,196 V246 A10,10 0 0 1 466,256 H352 A10,10 0 0 1 342,246 V196 A10,10 0 0 1 352,186 Z" />
+    
+  <g transform="translate(362.0, 204.0) scale(1.1666666666666667)" fill="none" stroke="#1D4ED8" stroke-width="2">
+    <path d="M11 12a1 1 0 1 0 2 0a1 1 0 1 0 -2 0" />
+    <path d="M7 12a5 5 0 1 0 10 0a5 5 0 1 0 -10 0" />
+    <path d="M3 12a9 9 0 1 0 18 0a9 9 0 1 0 -18 0" />
+  </g>
+    <text x="402" y="214" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="15" font-weight="800" fill="#111827">Goal</text>
+    <text x="402" y="238" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="13" fill="#64748B">验收标准</text>
+    <line x1="292" y1="409" x2="342" y2="221" stroke="#0F766E" stroke-width="2" />
+    <polygon points="342,221 330,218 336,231" fill="#0F766E" />
+
+    <line x1="476" y1="221" x2="526" y2="221" stroke="#1D4ED8" stroke-width="2.2" />
+    <polygon points="526,221 514,214 514,228" fill="#1D4ED8" />
+    <path fill="#DBEAFE" stroke="#1D4ED8" stroke-width="1.3" d="M536,186 H650 A10,10 0 0 1 660,196 V246 A10,10 0 0 1 650,256 H536 A10,10 0 0 1 526,246 V196 A10,10 0 0 1 536,186 Z" />
+    
+  <g transform="translate(546.0, 204.0) scale(1.1666666666666667)" fill="none" stroke="#1D4ED8" stroke-width="2">
+    <path d="M6 21l15 -15l-3 -3l-15 15l3 3" />
+    <path d="M15 6l3 3" />
+    <path d="M9 3a2 2 0 0 0 2 2a2 2 0 0 0 -2 2a2 2 0 0 0 -2 -2a2 2 0 0 0 2 -2" />
+    <path d="M19 13a2 2 0 0 0 2 2a2 2 0 0 0 -2 2a2 2 0 0 0 -2 -2a2 2 0 0 0 2 -2" />
+  </g>
+    <text x="586" y="214" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="15" font-weight="800" fill="#111827">Rewrite</text>
+    <text x="586" y="238" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="13" fill="#64748B">提示优化</text>
+
+    <line x1="660" y1="221" x2="710" y2="221" stroke="#1D4ED8" stroke-width="2.2" />
+    <polygon points="710,221 698,214 698,228" fill="#1D4ED8" />
+    <path fill="#DBEAFE" stroke="#1D4ED8" stroke-width="1.3" d="M720,186 H834 A10,10 0 0 1 844,196 V246 A10,10 0 0 1 834,256 H720 A10,10 0 0 1 710,246 V196 A10,10 0 0 1 720,186 Z" />
+    
+  <g transform="translate(730.0, 204.0) scale(1.1666666666666667)" fill="none" stroke="#1D4ED8" stroke-width="2">
+    <path d="M3 19a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+    <path d="M19 7a2 2 0 1 0 0 -4a2 2 0 0 0 0 4" />
+    <path d="M11 19h5.5a3.5 3.5 0 0 0 0 -7h-8a3.5 3.5 0 0 1 0 -7h4.5" />
+  </g>
+    <text x="770" y="214" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="15" font-weight="800" fill="#111827">Planner</text>
+    <text x="770" y="238" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="13" fill="#64748B">结构计划</text>
+
+    <line x1="844" y1="221" x2="894" y2="221" stroke="#1D4ED8" stroke-width="2.2" />
+    <polygon points="894,221 882,214 882,228" fill="#1D4ED8" />
+    <path fill="#DBEAFE" stroke="#1D4ED8" stroke-width="1.3" d="M904,186 H1018 A10,10 0 0 1 1028,196 V246 A10,10 0 0 1 1018,256 H904 A10,10 0 0 1 894,246 V196 A10,10 0 0 1 904,186 Z" />
+    
+  <g transform="translate(914.0, 204.0) scale(1.1666666666666667)" fill="none" stroke="#1D4ED8" stroke-width="2">
+    <path d="M4 6a2 2 0 0 1 2 -2h2a2 2 0 0 1 2 2v1a2 2 0 0 1 -2 2h-2a2 2 0 0 1 -2 -2l0 -1" />
+    <path d="M4 15a2 2 0 0 1 2 -2h2a2 2 0 0 1 2 2v3a2 2 0 0 1 -2 2h-2a2 2 0 0 1 -2 -2l0 -3" />
+    <path d="M14 6a2 2 0 0 1 2 -2h2a2 2 0 0 1 2 2v12a2 2 0 0 1 -2 2h-2a2 2 0 0 1 -2 -2l0 -12" />
+  </g>
+    <text x="954" y="214" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="15" font-weight="800" fill="#111827">Generator</text>
+    <text x="954" y="238" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="13" fill="#64748B">3 个候选</text>
+  </g>
+
+  <g id="critique-selection">
+    <line x1="961" y1="256" x2="896" y2="326" stroke="#1D4ED8" stroke-width="2" />
+    <polygon points="896,326 899,313 909,323" fill="#1D4ED8" />
+    <line x1="961" y1="256" x2="1032" y2="326" stroke="#1D4ED8" stroke-width="2" />
+    <polygon points="1032,326 1019,323 1029,313" fill="#1D4ED8" />
+    <path fill="#DBEAFE" stroke="#1D4ED8" stroke-width="1.2" d="M816,326 H956 A10,10 0 0 1 966,336 V382 A10,10 0 0 1 956,392 H816 A10,10 0 0 1 806,382 V336 A10,10 0 0 1 816,326 Z" />
+    <text x="836" y="354" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="15" font-weight="800" fill="#111827">Semantic Critic</text>
+    <text x="836" y="376" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="13" fill="#64748B">语义与可读性</text>
+    <path fill="#DBEAFE" stroke="#1D4ED8" stroke-width="1.2" d="M1012,326 H1152 A10,10 0 0 1 1162,336 V382 A10,10 0 0 1 1152,392 H1012 A10,10 0 0 1 1002,382 V336 A10,10 0 0 1 1012,326 Z" />
+    <text x="1030" y="354" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="15" font-weight="800" fill="#111827">Quality Critic</text>
+    <text x="1030" y="376" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="13" fill="#64748B">安全与渲染</text>
+    <line x1="886" y1="392" x2="953" y2="432" stroke="#F59E0B" stroke-width="2" />
+    <line x1="1082" y1="392" x2="1018" y2="432" stroke="#F59E0B" stroke-width="2" />
+    <path fill="#FEF3C7" stroke="#F59E0B" stroke-width="1.2" d="M930,432 H1044 A10,10 0 0 1 1054,442 V488 A10,10 0 0 1 1044,498 H930 A10,10 0 0 1 920,488 V442 A10,10 0 0 1 930,432 Z" />
+    
+  <g transform="translate(940.0, 449.0) scale(1.1666666666666667)" fill="none" stroke="#F59E0B" stroke-width="2">
+    <path d="M5 12l5 5l10 -10" />
+  </g>
+    <text x="978" y="459" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="15" font-weight="800" fill="#111827">Selector</text>
+    <text x="978" y="481" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="13" fill="#64748B">可解释选择</text>
+  </g>
+
+  <g id="validation-loop">
+    <line x1="1054" y1="465" x2="1110" y2="465" stroke="#F59E0B" stroke-width="2.2" />
+    <polygon points="1110,465 1098,458 1098,472" fill="#F59E0B" />
+    <path fill="#FEF3C7" stroke="#F59E0B" stroke-width="1.2" d="M1120,432 H1204 A10,10 0 0 1 1214,442 V488 A10,10 0 0 1 1204,498 H1120 A10,10 0 0 1 1110,488 V442 A10,10 0 0 1 1120,432 Z" />
+    
+  <g transform="translate(1132.0, 448.0) scale(1.0833333333333333)" fill="none" stroke="#F59E0B" stroke-width="2">
+    <path d="M3 21h4l13 -13a1.5 1.5 0 0 0 -4 -4l-13 13v4" />
+    <path d="M14.5 5.5l4 4" />
+    <path d="M12 8l-5 -5l-4 4l5 5" />
+    <path d="M7 8l-1.5 1.5" />
+    <path d="M16 12l5 5l-4 4l-5 -5" />
+    <path d="M16 17l-1.5 1.5" />
+  </g>
+    <text x="1166" y="459" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="15" font-weight="800" fill="#111827">Optimize</text>
+    <text x="1166" y="481" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="13" fill="#64748B">改写 SVG</text>
+
+    <path fill="#DBEAFE" stroke="#1D4ED8" stroke-width="1.2" d="M686,520 H816 A10,10 0 0 1 826,530 V576 A10,10 0 0 1 816,586 H686 A10,10 0 0 1 676,576 V530 A10,10 0 0 1 686,520 Z" />
+    
+  <g transform="translate(696.0, 536.0) scale(1.1666666666666667)" fill="none" stroke="#1D4ED8" stroke-width="2">
+    <path d="M12 3a12 12 0 0 0 8.5 3a12 12 0 0 1 -8.5 15a12 12 0 0 1 -8.5 -15a12 12 0 0 0 8.5 -3" />
+  </g>
+    <text x="736" y="547" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="15" font-weight="800" fill="#111827">Validator</text>
+    <text x="736" y="569" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="13" fill="#64748B">score + issues</text>
+    <line x1="1162" y1="498" x2="826" y2="553" stroke="#1D4ED8" stroke-width="2" />
+    <polygon points="826,553 838,544 840,558" fill="#1D4ED8" />
+
+    <path fill="#FEE2E2" stroke="#DC2626" stroke-width="1.2" d="M882,520 H1012 A10,10 0 0 1 1022,530 V576 A10,10 0 0 1 1012,586 H882 A10,10 0 0 1 872,576 V530 A10,10 0 0 1 882,520 Z" />
+    
+  <g transform="translate(892.0, 536.0) scale(1.1666666666666667)" fill="none" stroke="#DC2626" stroke-width="2">
+    <path d="M12 9v4" />
+    <path d="M10.363 3.591l-8.106 13.534a1.914 1.914 0 0 0 1.636 2.871h16.214a1.914 1.914 0 0 0 1.636 -2.87l-8.106 -13.536a1.914 1.914 0 0 0 -3.274 0" />
+    <path d="M12 16h.01" />
+  </g>
+    <text x="932" y="547" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="15" font-weight="800" fill="#111827">Taxonomy</text>
+    <text x="932" y="569" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="13" fill="#64748B">失败归因</text>
+    <line x1="826" y1="553" x2="872" y2="553" stroke="#DC2626" stroke-width="2" />
+    <polygon points="872,553 860,546 860,560" fill="#DC2626" />
+
+    <path fill="#FEE2E2" stroke="#DC2626" stroke-width="1.2" d="M1076,520 H1206 A10,10 0 0 1 1216,530 V576 A10,10 0 0 1 1206,586 H1076 A10,10 0 0 1 1066,576 V530 A10,10 0 0 1 1076,520 Z" />
+    
+  <g transform="translate(1086.0, 536.0) scale(1.1666666666666667)" fill="none" stroke="#DC2626" stroke-width="2">
+    <path d="M3 19a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+    <path d="M19 7a2 2 0 1 0 0 -4a2 2 0 0 0 0 4" />
+    <path d="M11 19h5.5a3.5 3.5 0 0 0 0 -7h-8a3.5 3.5 0 0 1 0 -7h4.5" />
+  </g>
+    <text x="1126" y="547" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="15" font-weight="800" fill="#111827">Router</text>
+    <text x="1126" y="569" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="13" fill="#64748B">修复路线</text>
+    <line x1="1022" y1="553" x2="1066" y2="553" stroke="#DC2626" stroke-width="2" />
+    <polygon points="1066,553 1054,546 1054,560" fill="#DC2626" />
+    <path d="M1141 520 L1141 610 L751 610 L751 586" fill="none" stroke="#DC2626" stroke-width="2" />
+    <polygon points="751,586 744,598 758,598" fill="#DC2626" />
+  </g>
+
+  <g id="output">
+    <path fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1.2" d="M86,580 H302 A10,10 0 0 1 312,590 V624 A10,10 0 0 1 302,634 H86 A10,10 0 0 1 76,624 V590 A10,10 0 0 1 86,580 Z" />
+    
+  <g transform="translate(98.0, 594.0) scale(1.0833333333333333)" fill="none" stroke="#0F766E" stroke-width="2">
+    <path d="M14 3v4a1 1 0 0 0 1 1h4" />
+    <path d="M11.5 21h-4.5a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2h7l5 5v5m-5 6h7m-3 -3l3 3l-3 3" />
+  </g>
+    <text x="136" y="614" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="16" font-weight="800" fill="#111827">Exporter + Memory Curator</text>
+  </g>
+
+  <text x="56" y="674" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="12" fill="#94A3B8">Source: README Agent workflow, svg_icon_agent/pipeline.py, svg_icon_agent/refiner.py</text>
+  <text x="1224" y="674" text-anchor="end" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="12" fill="#94A3B8">04</text>
+</svg>

@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <title>Cloud download icon</title>
+  <desc>A compact cloud silhouette with a large centered downward arrow</desc>
+  <!-- Cloud body -->
+  <path d="M64 160c0-26.5 21.5-48 48-48 4.4 0 8.6 0.6 12.6 1.7C130.6 100.2 146.2 88 164 88c24.3 0 44 19.7 44 44 0 2.9-0.3 5.7-0.8 8.4C218.6 145.3 228 158.1 228 172c0 19.9-16.1 36-36 36H80c-17.7 0-32-14.3-32-32 0-16.5 12.5-30.1 28.4-32.1C76.1 166.6 64 153.9 64 160z" fill="#4A90D9"/>
+  <!-- Arrow shaft -->
+  <rect x="120" y="108" width="16" height="60" rx="4" ry="4" fill="#FFFFFF"/>
+  <!-- Arrowhead left -->
+  <polyline points="120,168 104,152 120,168" fill="none" stroke="#FFFFFF" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Arrowhead right -->
+  <polyline points="136,168 152,152 136,168" fill="none" stroke="#FFFFFF" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Arrowhead bottom point -->
+  <polyline points="128,176 120,168 136,168 128,176" fill="none" stroke="#FFFFFF" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

@@ -1,0 +1,1 @@
+这里的 RAG 不是外部资料库，而是项目自己的运行记忆。每条 MemoryRecord 保存 prompt、summary、成功策略、失败模式、用户反馈、分数和标签。检索时用 BM25 从本地 jsonl 中取 top-k 经验，Goal Manager 再据此生成 objective、visual requirements、constraints 和 acceptance criteria。这样做的价值是让系统下一次生成时能利用已有失败，而不是每次从零开始。

@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">
+  <rect x="0" y="0" width="1280" height="720" fill="#F8FAFC"/>
+  <text x="56" y="72" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="36" font-weight="800" fill="#111827">当前结果：15 个 Web 样本，修复后全部有效</text>
+  <rect x="56" y="96" width="1168" height="52" rx="8" fill="#DBEAFE"/>
+  <text x="78" y="129" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="18" fill="#111827">现有运行结果说明修复闭环能提高通过率和平均分，但样本来自多次 Web 单 prompt 运行，不等同于完整批量基准。</text>
+
+  <g id="kpis">
+    <rect x="76" y="184" width="220" height="144" rx="10" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1.2"/>
+    <use data-icon="tabler-outline/chart-bar" x="104" y="210" width="32" height="32" fill="#1D4ED8" stroke-width="2"/>
+    <text x="104" y="270" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="44" font-weight="800" fill="#111827">15</text>
+    <text x="104" y="302" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="16" fill="#64748B">Web run samples</text>
+
+    <rect x="326" y="184" width="220" height="144" rx="10" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1.2"/>
+    <use data-icon="tabler-outline/shield" x="354" y="210" width="32" height="32" fill="#0F766E" stroke-width="2"/>
+    <text x="354" y="270" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="44" font-weight="800" fill="#0F766E">13/15</text>
+    <text x="354" y="302" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="16" fill="#64748B">baseline valid</text>
+
+    <rect x="576" y="184" width="220" height="144" rx="10" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1.2"/>
+    <use data-icon="tabler-outline/check" x="604" y="210" width="32" height="32" fill="#16A34A" stroke-width="2"/>
+    <text x="604" y="270" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="44" font-weight="800" fill="#16A34A">15/15</text>
+    <text x="604" y="302" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="16" fill="#64748B">refined valid</text>
+
+    <rect x="826" y="184" width="220" height="144" rx="10" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1.2"/>
+    <use data-icon="tabler-outline/refresh" x="854" y="210" width="32" height="32" fill="#F59E0B" stroke-width="2"/>
+    <text x="854" y="270" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="44" font-weight="800" fill="#F59E0B">3</text>
+    <text x="854" y="302" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="16" fill="#64748B">max repair rounds</text>
+  </g>
+
+  <g id="chartArea">
+    <!-- chart-plot-area: 120,424,708,526 -->
+    <rect x="76" y="376" width="680" height="204" rx="12" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1.2"/>
+    <text x="108" y="416" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="22" font-weight="800" fill="#111827">有效率和平均分变化</text>
+    <line x1="120" y1="526" x2="708" y2="526" stroke="#CBD5E1" stroke-width="1.2"/>
+    <text x="120" y="556" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="15" fill="#64748B">valid rate</text>
+    <rect x="252" y="475" width="184" height="32" rx="6" fill="#DBEAFE"/>
+    <rect x="252" y="475" width="159" height="32" rx="6" fill="#1D4ED8"/>
+    <text x="450" y="498" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="16" font-weight="800" fill="#111827">baseline 86.7%</text>
+    <rect x="252" y="520" width="184" height="32" rx="6" fill="#CCFBF1"/>
+    <rect x="252" y="520" width="184" height="32" rx="6" fill="#16A34A"/>
+    <text x="450" y="543" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="16" font-weight="800" fill="#111827">refined 100%</text>
+
+    <text x="120" y="460" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="15" fill="#64748B">avg score</text>
+    <rect x="252" y="424" width="184" height="32" rx="6" fill="#DBEAFE"/>
+    <rect x="252" y="424" width="164" height="32" rx="6" fill="#1D4ED8"/>
+    <text x="450" y="447" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="16" font-weight="800" fill="#111827">89.33 → 93.20</text>
+    <line x1="612" y1="424" x2="612" y2="552" stroke="#94A3B8" stroke-width="1" stroke-dasharray="4 5"/>
+    <text x="612" y="572" text-anchor="middle" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="13" fill="#64748B">100%</text>
+  </g>
+
+  <g id="caveat">
+    <rect x="796" y="376" width="408" height="204" rx="12" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1.2"/>
+    <rect x="826" y="416" width="54" height="54" rx="10" fill="#FEE2E2"/>
+    <use data-icon="tabler-outline/alert-triangle" x="839" y="429" width="28" height="28" fill="#DC2626" stroke-width="2"/>
+    <text x="900" y="438" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="22" font-weight="800" fill="#111827">边界说明</text>
+    <text x="826" y="500" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="18" fill="#111827">
+      <tspan x="826" dy="0">这些结果来自 outputs/web 下的 15 次样本运行。</tspan>
+      <tspan x="826" dy="32">它们证明修复链路可用，但不能替代完整、</tspan>
+      <tspan x="826" dy="32">固定 prompt 集合上的批量对比实验。</tspan>
+    </text>
+  </g>
+
+  <text x="56" y="674" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="12" fill="#94A3B8">Source: outputs/web/*/metrics.json; aggregation in current workspace</text>
+  <text x="1224" y="674" text-anchor="end" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="12" fill="#94A3B8">09</text>
+</svg>

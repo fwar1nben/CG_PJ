@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">
+  <rect x="0" y="0" width="1280" height="720" fill="#F8FAFC"/>
+  <text x="56" y="72" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="36" font-weight="800" fill="#111827">修复闭环：先诊断，再选择修复路线</text>
+  <rect x="56" y="96" width="1168" height="52" rx="8" fill="#FEE2E2"/>
+  <text x="78" y="129" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="18" fill="#111827">Validator 发现问题后，系统不直接重试；Failure Taxonomy 先归因，Repair Router 再把问题翻译成 Refiner 的具体任务。</text>
+
+  <g id="loop-diagram">
+    <rect x="76" y="182" width="620" height="430" rx="12" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1.2"/>
+    <text x="108" y="224" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="24" font-weight="800" fill="#111827">Validation and Repair Loop</text>
+
+    <rect x="142" y="282" width="150" height="76" rx="10" fill="#DBEAFE" stroke="#1D4ED8" stroke-width="1.3"/>
+    <use data-icon="tabler-outline/shield" x="164" y="304" width="30" height="30" fill="#1D4ED8" stroke-width="2"/>
+    <text x="206" y="314" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="17" font-weight="800" fill="#111827">Validator</text>
+    <text x="206" y="338" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="13" fill="#64748B">score + issues</text>
+
+    <line x1="292" y1="320" x2="362" y2="320" stroke="#DC2626" stroke-width="2.4"/>
+    <polygon points="362,320 350,313 350,327" fill="#DC2626"/>
+    <rect x="362" y="282" width="150" height="76" rx="10" fill="#FEE2E2" stroke="#DC2626" stroke-width="1.3"/>
+    <use data-icon="tabler-outline/alert-triangle" x="384" y="304" width="30" height="30" fill="#DC2626" stroke-width="2"/>
+    <text x="426" y="314" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="17" font-weight="800" fill="#111827">Taxonomy</text>
+    <text x="426" y="338" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="13" fill="#64748B">failure type</text>
+
+    <line x1="512" y1="320" x2="582" y2="320" stroke="#DC2626" stroke-width="2.4"/>
+    <polygon points="582,320 570,313 570,327" fill="#DC2626"/>
+    <rect x="582" y="282" width="150" height="76" rx="10" fill="#FEE2E2" stroke="#DC2626" stroke-width="1.3"/>
+    <use data-icon="tabler-outline/route" x="604" y="304" width="30" height="30" fill="#DC2626" stroke-width="2"/>
+    <text x="646" y="314" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="17" font-weight="800" fill="#111827">Router</text>
+    <text x="646" y="338" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="13" fill="#64748B">repair route</text>
+
+    <path d="M657 358 L657 444 L217 444 L217 358" fill="none" stroke="#DC2626" stroke-width="2.4"/>
+    <polygon points="217,358 210,370 224,370" fill="#DC2626"/>
+    <rect x="352" y="404" width="170" height="80" rx="10" fill="#FEF3C7" stroke="#F59E0B" stroke-width="1.3"/>
+    <use data-icon="tabler-outline/tools" x="376" y="428" width="30" height="30" fill="#F59E0B" stroke-width="2"/>
+    <text x="420" y="438" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="17" font-weight="800" fill="#111827">Refiner</text>
+    <text x="420" y="462" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="13" fill="#64748B">complete revised SVG</text>
+
+    <rect x="144" y="508" width="488" height="54" rx="8" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="1"/>
+    <text x="168" y="542" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="17" fill="#111827">最多迭代 3 轮；如果 Validator 通过，则 Taxonomy / Router / Refiner 被跳过。</text>
+  </g>
+
+  <g id="evidence">
+    <rect x="744" y="182" width="460" height="430" rx="12" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1.2"/>
+    <text x="776" y="224" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="24" font-weight="800" fill="#111827">闭环带来的可见收益</text>
+    <g id="metric-1">
+      <rect x="776" y="264" width="190" height="116" rx="10" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="1"/>
+      <text x="802" y="296" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="16" fill="#64748B">coffee run</text>
+      <text x="802" y="342" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="44" font-weight="800" fill="#16A34A">70→95</text>
+      <text x="802" y="366" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="14" fill="#64748B">1 轮修复后通过</text>
+    </g>
+    <g id="metric-2">
+      <rect x="986" y="264" width="190" height="116" rx="10" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="1"/>
+      <text x="1012" y="296" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="16" fill="#64748B">dog run</text>
+      <text x="1012" y="342" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="44" font-weight="800" fill="#16A34A">65→100</text>
+      <text x="1012" y="366" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="14" fill="#64748B">1 轮修复后满分</text>
+    </g>
+    <rect x="776" y="416" width="400" height="132" rx="10" fill="#FEE2E2" stroke="#DC2626" stroke-width="1"/>
+    <text x="804" y="452" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="20" font-weight="800" fill="#111827">为什么不是普通 retry</text>
+    <text x="804" y="490" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="17" fill="#111827">
+      <tspan x="804" dy="0">Taxonomy 保存失败类型、证据、优先级；</tspan>
+      <tspan x="804" dy="30">Router 生成路线和具体 brief；</tspan>
+      <tspan x="804" dy="30">Refiner 才拿到上下文返回完整 SVG。</tspan>
+    </text>
+  </g>
+
+  <text x="56" y="674" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="12" fill="#94A3B8">Source: outputs/web/*/metrics.json, svg_icon_agent/refiner.py</text>
+  <text x="1224" y="674" text-anchor="end" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="12" fill="#94A3B8">07</text>
+</svg>

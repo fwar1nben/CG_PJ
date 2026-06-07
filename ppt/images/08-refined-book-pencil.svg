@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <title>Open book with pencil</title>
+  <desc>An open book with gently curved pages and a pencil resting diagonally across it, symbolizing education and learning.</desc>
+  <path d="M128 56 C100 56 60 72 36 88 L36 200 C60 184 100 168 128 168 Z" fill="#6b8e9b"/>
+  <path d="M128 56 C156 56 196 72 220 88 L220 200 C196 184 156 168 128 168 Z" fill="#7fa3b0"/>
+  <path d="M128 56 L128 168" stroke="#5a7a85" stroke-width="3" fill="none"/>
+  <path d="M128 168 C100 168 60 184 36 200" stroke="#5a7a85" stroke-width="2" fill="none"/>
+  <path d="M128 168 C156 168 196 184 220 200" stroke="#5a7a85" stroke-width="2" fill="none"/>
+  <rect x="82" y="68" width="14" height="120" rx="2" fill="#e8c37a" transform="rotate(35 89 128)"/>
+  <polygon points="82,188 96,188 89,212" fill="#f5e6c8" transform="rotate(35 89 200)"/>
+  <polygon points="86,204 92,204 89,212" fill="#4a4a4a" transform="rotate(35 89 208)"/>
+  <rect x="82" y="68" width="14" height="16" rx="2" fill="#d4a5a5" transform="rotate(35 89 76)"/>
+  <rect x="82" y="82" width="14" height="6" rx="1" fill="#b0b0b0" transform="rotate(35 89 85)"/>
+</svg>

@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">
+  <rect x="0" y="0" width="1280" height="720" fill="#F8FAFC"/>
+  <text x="56" y="72" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="36" font-weight="800" fill="#111827">为什么选择 SVG 图标生成</text>
+  <rect x="56" y="96" width="1168" height="52" rx="8" fill="#DBEAFE"/>
+  <text x="78" y="129" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="18" fill="#111827">小图标看似简单，但同时要求语义准确、轮廓清楚、结构可编辑、语法安全；这正适合拆成 Agent 工作流。</text>
+
+  <g id="problem-chain">
+    <rect x="76" y="180" width="520" height="390" rx="12" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1.2"/>
+    <text x="108" y="226" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="24" font-weight="800" fill="#111827">核心约束</text>
+    <g id="constraint-1">
+      <circle cx="124" cy="282" r="20" fill="#DBEAFE"/>
+      <text x="124" y="289" text-anchor="middle" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="18" font-weight="800" fill="#1D4ED8">1</text>
+      <text x="162" y="276" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="20" font-weight="700" fill="#111827">输入短，但约束多</text>
+      <text x="162" y="306" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="16" fill="#64748B">对象、风格、尺寸、配色和可读性都要同时满足。</text>
+    </g>
+    <line x1="124" y1="306" x2="124" y2="342" stroke="#CBD5E1" stroke-width="2"/>
+    <g id="constraint-2">
+      <circle cx="124" cy="366" r="20" fill="#CCFBF1"/>
+      <text x="124" y="373" text-anchor="middle" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="18" font-weight="800" fill="#0F766E">2</text>
+      <text x="162" y="360" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="20" font-weight="700" fill="#111827">输出必须可编辑</text>
+      <text x="162" y="390" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="16" fill="#64748B">SVG 需要保留路径、形状、文本和调色空间。</text>
+    </g>
+    <line x1="124" y1="390" x2="124" y2="426" stroke="#CBD5E1" stroke-width="2"/>
+    <g id="constraint-3">
+      <circle cx="124" cy="450" r="20" fill="#FEF3C7"/>
+      <text x="124" y="457" text-anchor="middle" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="18" font-weight="800" fill="#F59E0B">3</text>
+      <text x="162" y="444" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="20" font-weight="700" fill="#111827">错误要能定位</text>
+      <text x="162" y="474" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="16" fill="#64748B">语义偏差、SVG 语法、外部引用、安全标签要分开处理。</text>
+    </g>
+  </g>
+
+  <g id="decision-panel">
+    <rect x="636" y="180" width="568" height="390" rx="12" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1.2"/>
+    <text x="668" y="226" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="24" font-weight="800" fill="#111827">设计选择：让 Agent 管理不确定性</text>
+    <g id="compare-row-1">
+      <rect x="668" y="264" width="230" height="86" rx="10" fill="#FEE2E2"/>
+      <text x="692" y="296" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="20" font-weight="800" fill="#DC2626">单次生成</text>
+      <text x="692" y="326" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="15" fill="#111827">快，但失败原因混在一起。</text>
+      <polygon points="922,302 956,286 956,318" fill="#CBD5E1"/>
+      <rect x="984" y="264" width="188" height="86" rx="10" fill="#CCFBF1"/>
+      <text x="1008" y="296" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="20" font-weight="800" fill="#0F766E">Agent 流水线</text>
+      <text x="1008" y="326" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="15" fill="#111827">把失败拆成可修复环节。</text>
+    </g>
+    <g id="design-bullets">
+      <use data-icon="tabler-outline/target" x="672" y="390" width="30" height="30" fill="#1D4ED8" stroke-width="2"/>
+      <text x="718" y="413" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="19" fill="#111827">先显式生成目标和验收标准，再生成 SVG。</text>
+      <use data-icon="tabler-outline/search" x="672" y="440" width="30" height="30" fill="#0F766E" stroke-width="2"/>
+      <text x="718" y="463" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="19" fill="#111827">候选输出由语义 Critic 和 SVG 质量 Critic 分别评审。</text>
+      <use data-icon="tabler-outline/shield" x="672" y="490" width="30" height="30" fill="#DC2626" stroke-width="2"/>
+      <text x="718" y="513" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="19" fill="#111827">验证失败进入 Taxonomy 和 Router，而不是直接重试。</text>
+    </g>
+  </g>
+
+  <text x="56" y="674" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="12" fill="#94A3B8">Source: README.md, svg_icon_agent/pipeline.py, svg_icon_agent/refiner.py</text>
+  <text x="1224" y="674" text-anchor="end" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="12" fill="#94A3B8">03</text>
+</svg>

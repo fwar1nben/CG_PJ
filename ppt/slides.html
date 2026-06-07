@@ -1,0 +1,364 @@
+<section class="slide accent" data-layout="SWISS-COVER-ASCII" data-animate="hero">
+  <div class="canvas-card">
+    <canvas class="ascii-bg" aria-hidden="true"></canvas>
+    <div class="chrome-min">
+      <div class="l">SVG ICON AGENT · COMPUTER GRAPHICS PROJECT 3</div>
+      <div class="r">CG · 2026 SPRING · 01 / 10</div>
+    </div>
+    <div style="flex:1;padding:0;display:grid;grid-template-rows:auto 1fr auto;gap:2.6vh">
+      <div data-anim="kicker" class="t-meta" style="color:rgba(255,255,255,.78);letter-spacing:.22em">AGENTIC 2D GENERATION</div>
+      <h1 data-anim="title" style="align-self:center;font-family:var(--sans),var(--sans-zh);font-weight:200;font-size:min(9.4vw,16vh);line-height:.95;letter-spacing:-.025em;color:#fff">SVG 图标<br/>生成 <span style="font-style:italic;font-weight:300">Agent</span></h1>
+      <div data-anim="bottom" style="display:grid;grid-template-rows:auto auto;gap:1.6vh;border-top:1px solid rgba(255,255,255,.22);padding-top:2vh">
+        <div class="lead" style="max-width:54ch;color:rgba(255,255,255,.88);font-weight:300">把短文本图标需求拆成目标管理、规划、候选生成、双路批评、共识选择、验证、修复路由和记忆沉淀。</div>
+        <div style="display:flex;justify-content:space-between;align-items:end">
+          <div class="t-meta" style="color:rgba(255,255,255,.62)">CODE · github.com/fwar1nben/CG_PJ</div>
+          <div class="t-meta" style="color:rgba(255,255,255,.62)">10 MINUTES · PRESENTATION</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="slide" data-layout="S01" data-animate="hero">
+  <div class="canvas-card">
+    <div class="chrome-min">
+      <div class="l">PROJECT 3 REQUIREMENTS</div>
+      <div class="r">02 / 10</div>
+    </div>
+    <div style="flex:1;display:grid;grid-template-rows:1fr auto;gap:3vh">
+      <div data-anim="line" style="display:flex;flex-direction:column;justify-content:center;gap:1.1vh">
+        <div class="cover-row" style="display:grid;grid-template-columns:12vw 1fr;gap:2.6vw;align-items:baseline;border-top:1px solid var(--border-subtle);padding-top:1.1vh">
+          <div class="num-mega">01</div>
+          <div>
+            <div class="t-cat">TOPIC</div>
+            <div class="name-mega" style="font-size:min(5vw,9vh);letter-spacing:-.025em">Agent + 图形学</div>
+            <p class="t-body" style="max-width:52ch;margin-top:1vh">选择 2D 可编辑矢量图标生成，避免把任务简化成一次文生图调用。</p>
+          </div>
+        </div>
+        <div class="cover-row" style="display:grid;grid-template-columns:12vw 1fr;gap:2.6vw;align-items:baseline;border-top:1px solid var(--border-subtle);padding-top:1.1vh">
+          <div class="num-mega">02</div>
+          <div>
+            <div class="t-cat">PRESENTATION</div>
+            <div class="name-mega muted" style="font-size:min(5vw,9vh);letter-spacing:-.025em">内容 / 创新 / 结果 / 分工</div>
+          </div>
+        </div>
+        <div class="cover-row" style="display:grid;grid-template-columns:12vw 1fr;gap:2.6vw;align-items:baseline;border-top:1px solid var(--border-subtle);padding-top:1.1vh">
+          <div class="num-mega" style="color:var(--accent)">03</div>
+          <div>
+            <div class="t-cat accent">QUALITY</div>
+            <div class="name-mega" style="font-size:min(5vw,9vh);letter-spacing:-.025em;color:var(--accent)">突出原创 Agent 设计</div>
+          </div>
+        </div>
+      </div>
+      <div class="t-meta" style="display:flex;justify-content:space-between;border-top:1px solid var(--border-subtle);padding-top:1.4vh">
+        <span>PDF REQUIREMENT: REPORT PDF + PPT + ON-TIME TALK</span>
+        <span>DDL: 2026-06-10 23:59</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="slide" data-layout="S08" data-animate="duo-mirror">
+  <div class="canvas-card">
+    <div class="chrome-min">
+      <div class="l">WHY SVG ICON AGENT</div>
+      <div class="r">03 / 10</div>
+    </div>
+    <div data-anim="line" style="display:flex;flex-direction:column;gap:1.4vh">
+      <div class="t-cat">PROBLEM FRAMING</div>
+      <h2 class="h-xl-zh" style="font-size:min(5.7vw,10.2vh)">图标不是一张图</h2>
+    </div>
+    <div class="duo-compare">
+      <div class="col">
+        <div class="col-tag"><span class="num">A</span><span>Raster generation</span></div>
+        <div class="col-ttl">一次生成</div>
+        <p class="col-desc">文生图可以快速得到像素结果，但小图标需要可编辑、可检查、可复用，错误也要能定位到结构。</p>
+        <ul class="col-list">
+          <li>输出难以继续编辑</li>
+          <li>语义对齐缺少可解释诊断</li>
+          <li>安全、尺寸、颜色规则不易机检</li>
+        </ul>
+      </div>
+      <span class="vrule"></span>
+      <div class="col accent">
+        <div class="col-tag"><span class="num">B</span><span>Agentic vector workflow</span></div>
+        <div class="col-ttl">协作修复</div>
+        <p class="col-desc">本项目把图标生成转化为 SVG 程序化图形任务，让多个 Agent 分工判断、选择、优化和修复。</p>
+        <ul class="col-list">
+          <li>输出为 256×256 可编辑 SVG</li>
+          <li>候选、批评、选择理由全留痕</li>
+          <li>本地工具检查安全和可渲染性</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="slide" data-layout="S11" data-animate="timeline-walk">
+  <div class="canvas-card">
+    <div class="chrome-min">
+      <div class="l">METHOD FLOW</div>
+      <div class="r">04 / 10</div>
+    </div>
+    <div data-anim="line" style="display:grid;grid-template-columns:5fr 7fr;gap:3vw;align-items:start">
+      <div>
+        <div class="t-cat">PIPELINE</div>
+        <h2 class="h-xl-zh" style="font-size:min(5.4vw,9.8vh)">从一句 prompt 到可提交 SVG</h2>
+      </div>
+      <p class="t-body" style="max-width:56ch">每个关键节点都有状态、JSON 产物或 SVG 文件。Web UI 中同一张依赖图会显示 waiting / active / done / skipped / error。</p>
+    </div>
+    <div class="timeline-h" style="margin-top:3vh">
+      <div class="tl-row" style="grid-template-columns:repeat(5,1fr)">
+        <div class="th-node up">
+          <span class="dot"></span>
+          <div class="label"><span class="yr">01</span><span class="name">Goal</span><span class="desc">目标与验收标准</span></div>
+        </div>
+        <div class="th-node down">
+          <span class="dot"></span>
+          <div class="label"><span class="yr">02</span><span class="name">Plan</span><span class="desc">结构化图标计划</span></div>
+        </div>
+        <div class="th-node up accent">
+          <span class="dot"></span>
+          <div class="label"><span class="yr">03</span><span class="name">Candidates</span><span class="desc">三路 SVG 草稿</span></div>
+        </div>
+        <div class="th-node down">
+          <span class="dot"></span>
+          <div class="label"><span class="yr">04</span><span class="name">Critique</span><span class="desc">语义与 SVG 质量双评审</span></div>
+        </div>
+        <div class="th-node up accent">
+          <span class="dot"></span>
+          <div class="label"><span class="yr">05</span><span class="name">Repair</span><span class="desc">验证、分类、路由、精修</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="t-meta" style="border-top:1px solid var(--border-subtle);padding-top:1.6vh">OUTPUTS: candidates / selected / baseline / refined / metrics / trace / gallery</div>
+  </div>
+</section>
+
+<section class="slide" data-layout="S17" data-animate="system-diagram">
+  <div class="canvas-card">
+    <div class="chrome-min">
+      <div class="l">AGENT ARCHITECTURE</div>
+      <div class="r">05 / 10</div>
+    </div>
+    <div data-anim="line" style="display:grid;grid-template-columns:4.5fr 7.5fr;gap:3vw;align-items:start">
+      <div>
+        <div class="t-cat">SYSTEM DESIGN</div>
+        <h2 class="h-xl-zh" style="font-size:min(5.4vw,9.8vh)">不是一条链，而是一支小队</h2>
+      </div>
+      <p class="t-body">LLM-backed Agent 负责目标、规划、生成、批评、选择、优化、验证和修复。本地工具只做可验证的 SVG 语法、安全、渲染和导出。</p>
+    </div>
+    <div data-anim="up" style="flex:1;display:grid;grid-template-columns:repeat(4,1fr);grid-template-rows:repeat(3,1fr);gap:1.2vw;margin-top:3vh">
+      <div class="card-fill" style="padding:2vh 1.4vw;display:flex;flex-direction:column;justify-content:space-between"><span class="t-meta">Memory Tool</span><strong class="t-h-prod">检索历史经验</strong><span class="t-body-sm">相似 prompt 的成功/失败模式</span></div>
+      <div class="card-fill" style="padding:2vh 1.4vw;display:flex;flex-direction:column;justify-content:space-between"><span class="t-meta">Goal Manager</span><strong class="t-h-prod">生成标准</strong><span class="t-body-sm">目标、约束、验收条件</span></div>
+      <div class="card-fill" style="padding:2vh 1.4vw;display:flex;flex-direction:column;justify-content:space-between"><span class="t-meta">Rewriter / Planner</span><strong class="t-h-prod">压缩意图</strong><span class="t-body-sm">可执行的 SVG 计划</span></div>
+      <div class="card-accent" style="padding:2vh 1.4vw;display:flex;flex-direction:column;justify-content:space-between"><span class="t-meta" style="color:var(--accent-on)">Generator</span><strong class="t-h-prod" style="color:var(--accent-on)">多候选生成</strong><span style="font-size:16px;line-height:1.55">每轮生成 3 个不同 SVG 草稿</span></div>
+      <div class="card-fill" style="padding:2vh 1.4vw;display:flex;flex-direction:column;justify-content:space-between"><span class="t-meta">Semantic Critic</span><strong class="t-h-prod">看懂没有</strong><span class="t-body-sm">识别度、小尺寸语义</span></div>
+      <div class="card-fill" style="padding:2vh 1.4vw;display:flex;flex-direction:column;justify-content:space-between"><span class="t-meta">SVG Critic</span><strong class="t-h-prod">能不能用</strong><span class="t-body-sm">可编辑、安全、渲染风险</span></div>
+      <div class="card-fill" style="padding:2vh 1.4vw;display:flex;flex-direction:column;justify-content:space-between"><span class="t-meta">Selector</span><strong class="t-h-prod">共识选择</strong><span class="t-body-sm">给出 winner 与 repair brief</span></div>
+      <div class="card-fill" style="padding:2vh 1.4vw;display:flex;flex-direction:column;justify-content:space-between"><span class="t-meta">Optimizer</span><strong class="t-h-prod">合成反馈</strong><span class="t-body-sm">批评 + 工具 + 人工建议</span></div>
+      <div class="card-fill" style="padding:2vh 1.4vw;display:flex;flex-direction:column;justify-content:space-between"><span class="t-meta">Validator</span><strong class="t-h-prod">LLM 验收</strong><span class="t-body-sm">语义、视觉、规则合规</span></div>
+      <div class="card-fill" style="padding:2vh 1.4vw;display:flex;flex-direction:column;justify-content:space-between"><span class="t-meta">Taxonomy</span><strong class="t-h-prod">失败归因</strong><span class="t-body-sm">语义、布局、安全、复杂度</span></div>
+      <div class="card-fill" style="padding:2vh 1.4vw;display:flex;flex-direction:column;justify-content:space-between"><span class="t-meta">Router / Refiner</span><strong class="t-h-prod">路由修复</strong><span class="t-body-sm">选择重构、简化、局部 patch</span></div>
+      <div class="card-ink" style="padding:2vh 1.4vw;display:flex;flex-direction:column;justify-content:space-between"><span class="t-meta">Exporter</span><strong class="t-h-prod" style="color:var(--paper)">交付物</strong><span style="font-size:16px;line-height:1.55;color:rgba(255,255,255,.78)">SVG / PNG / gallery / trace</span></div>
+    </div>
+  </div>
+</section>
+
+<section class="slide" data-layout="S04" data-animate="grid-reveal">
+  <div class="canvas-card">
+    <div class="chrome-min">
+      <div class="l">INNOVATION POINTS</div>
+      <div class="r">06 / 10</div>
+    </div>
+    <div data-anim="line" style="display:flex;flex-direction:column;gap:1.2vh">
+      <div class="t-cat">ORIGINALITY</div>
+      <h2 class="h-xl-zh" style="font-size:min(5.4vw,9.8vh)">Agent 特色集中在六个机制</h2>
+    </div>
+    <div class="sub-grid-3-2" data-anim="up">
+      <div class="sub-card" style="border-radius:0"><i data-lucide="target"></i><span class="nb-corner">01</span><div class="ttl">目标管理</div><p class="desc">把主观 prompt 变成显式 objective、constraints 和 acceptance criteria。</p></div>
+      <div class="sub-card" style="border-radius:0"><i data-lucide="database"></i><span class="nb-corner">02</span><div class="ttl">检索记忆</div><p class="desc">从本地历史运行中提取成功模式、失败模式和用户反馈。</p></div>
+      <div class="sub-card accent" style="border-radius:0"><i data-lucide="git-branch"></i><span class="nb-corner">03</span><div class="ttl">多候选协作</div><p class="desc">不是单次采样，生成多个可比较 SVG 草稿并留下评分证据。</p></div>
+      <div class="sub-card" style="border-radius:0"><i data-lucide="messages-square"></i><span class="nb-corner">04</span><div class="ttl">双 Critic</div><p class="desc">语义 Critic 看是否像，SVG 质量 Critic 看是否安全、可编辑。</p></div>
+      <div class="sub-card" style="border-radius:0"><i data-lucide="route"></i><span class="nb-corner">05</span><div class="ttl">失败路由</div><p class="desc">先分类根因，再决定 safety rebuild、semantic recomposition 或 minor patch。</p></div>
+      <div class="sub-card" style="border-radius:0"><i data-lucide="sliders-horizontal"></i><span class="nb-corner">06</span><div class="ttl">人在环路</div><p class="desc">Web UI 支持后验 optimizer feedback，不必重跑完整规划链。</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="slide" data-layout="S20" data-animate="stacked-ledger">
+  <div class="canvas-card">
+    <div class="chrome-min">
+      <div class="l">RESULT SNAPSHOT</div>
+      <div class="r">07 / 10</div>
+    </div>
+    <div data-anim="ledger" style="flex:1;display:flex;flex-direction:column;justify-content:center;gap:0">
+      <div class="ledger-row" style="display:grid;grid-template-columns:26vw 1fr 9vw;gap:3vw;align-items:end;border-top:1px solid var(--border-subtle);padding:2.2vh 0">
+        <div class="ledger-num" style="font-family:var(--sans);font-weight:200;font-size:min(8vw,13.4vh);line-height:.9;letter-spacing:-.04em">13</div>
+        <div class="ledger-label"><div class="t-cat">WEB RUNS</div><div class="t-body">已保存的交互式 Web 运行，含候选、选择、验证、修复和导出文件。</div></div>
+        <div class="ledger-icon"><div class="geo-square" style="width:3vw;height:3vw"></div></div>
+      </div>
+      <div class="ledger-row" style="display:grid;grid-template-columns:26vw 1fr 9vw;gap:3vw;align-items:end;border-top:1px solid var(--border-subtle);padding:2.2vh 0">
+        <div class="ledger-num" style="font-family:var(--sans);font-weight:200;font-size:min(8vw,13.4vh);line-height:.9;letter-spacing:-.04em">11/13</div>
+        <div class="ledger-label"><div class="t-cat">BASELINE VALID</div><div class="t-body">优化后 baseline 已有较高可用率，但仍保留修复空间。</div></div>
+        <div class="ledger-icon"><div class="geo-line" style="width:4vw;height:4px"></div></div>
+      </div>
+      <div class="ledger-row" style="display:grid;grid-template-columns:26vw 1fr 9vw;gap:3vw;align-items:end;border-top:1px solid var(--border-subtle);padding:2.2vh 0">
+        <div class="ledger-num" style="font-family:var(--sans);font-weight:200;font-size:min(8vw,13.4vh);line-height:.9;letter-spacing:-.04em;color:var(--accent)">13/13</div>
+        <div class="ledger-label"><div class="t-cat accent">REFINED VALID</div><div class="t-body">经过 Validator、Failure Taxonomy、Repair Router 与 Refiner 后全部通过有效性判断。</div></div>
+        <div class="ledger-icon"><div class="geo-square" style="width:3vw;height:3vw"></div></div>
+      </div>
+      <div class="ledger-row" style="display:grid;grid-template-columns:26vw 1fr 9vw;gap:3vw;align-items:end;border-top:1px solid var(--border-subtle);border-bottom:2px solid var(--accent);padding:2.2vh 0">
+        <div class="ledger-num" style="font-family:var(--sans);font-weight:200;font-size:min(8vw,13.4vh);line-height:.9;letter-spacing:-.04em">88.38→92.85</div>
+        <div class="ledger-label"><div class="t-cat">AVERAGE SCORE</div><div class="t-body">平均分提升 +4.46，最大修复轮数为 3。指标来自 outputs/web/*/metrics.json。</div></div>
+        <div class="ledger-icon"><div class="geo-line" style="width:4vw;height:4px;background:var(--accent)"></div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="slide" data-layout="S15" data-animate="matrix-fill">
+  <div class="canvas-card">
+    <div class="chrome-min">
+      <div class="l">VISUAL EVIDENCE</div>
+      <div class="r">08 / 10</div>
+    </div>
+    <div data-anim="line" style="display:flex;flex-direction:column;gap:1.2vh">
+      <div class="t-cat">CANDIDATE SELECTION + REFINEMENT</div>
+      <h2 class="h-xl-zh" style="font-size:min(5.4vw,9.8vh)">同一 prompt 的可解释选择</h2>
+    </div>
+    <div data-anim="up" style="display:grid;grid-template-columns:repeat(4,1fr);grid-template-rows:repeat(2,1fr);gap:1.1vw;margin-top:3vh;flex:1;min-height:0">
+      <figure class="card-fill" style="padding:1.4vh 1vw;display:flex;flex-direction:column;gap:1vh;min-height:0">
+        <div class="frame-img r-1x1 fit-contain" style="background:var(--paper);max-height:20vh"><img src="images/08-candidate-1.svg" data-image-slot="s15-grid-icon-1x1" alt="候选 SVG 1"></div>
+        <figcaption class="t-body-sm"><strong>Candidate 1</strong><br/>Semantic 35 / Quality 85</figcaption>
+      </figure>
+      <figure class="card-fill" style="padding:1.4vh 1vw;display:flex;flex-direction:column;gap:1vh;min-height:0;border-top:3px solid var(--accent)">
+        <div class="frame-img r-1x1 fit-contain" style="background:var(--paper);max-height:20vh"><img src="images/08-candidate-2.svg" data-image-slot="s15-grid-icon-1x1" alt="候选 SVG 2"></div>
+        <figcaption class="t-body-sm"><strong>Candidate 2</strong><br/>Semantic 80 / Quality 92</figcaption>
+      </figure>
+      <figure class="card-fill" style="padding:1.4vh 1vw;display:flex;flex-direction:column;gap:1vh;min-height:0">
+        <div class="frame-img r-1x1 fit-contain" style="background:var(--paper);max-height:20vh"><img src="images/08-candidate-3.svg" data-image-slot="s15-grid-icon-1x1" alt="候选 SVG 3"></div>
+        <figcaption class="t-body-sm"><strong>Candidate 3</strong><br/>Semantic 90 / Quality 95</figcaption>
+      </figure>
+      <figure class="card-accent" style="padding:1.4vh 1vw;display:flex;flex-direction:column;gap:1vh;min-height:0">
+        <div class="frame-img r-1x1 fit-contain" style="background:var(--paper);max-height:20vh"><img src="images/08-refined-cloud.svg" data-image-slot="s15-grid-icon-1x1" alt="精修后 SVG"></div>
+        <figcaption style="font-size:16px;line-height:1.45"><strong>Refined</strong><br/>Score 88 → 95</figcaption>
+      </figure>
+      <figure class="card-fill" style="padding:1.4vh 1vw;display:flex;flex-direction:column;gap:1vh;min-height:0">
+        <div class="frame-img r-1x1 fit-contain" style="background:var(--paper);max-height:20vh"><img src="images/08-refined-rocket.svg" data-image-slot="s15-grid-icon-1x1" alt="精修 SVG 输出"></div>
+        <figcaption class="t-body-sm"><strong>Output</strong><br/>运动感图标</figcaption>
+      </figure>
+      <figure class="card-fill" style="padding:1.4vh 1vw;display:flex;flex-direction:column;gap:1vh;min-height:0">
+        <div class="frame-img r-1x1 fit-contain" style="background:var(--paper);max-height:20vh"><img src="images/08-refined-book-pencil.svg" data-image-slot="s15-grid-icon-1x1" alt="精修 SVG 输出"></div>
+        <figcaption class="t-body-sm"><strong>Output</strong><br/>教育图标</figcaption>
+      </figure>
+      <figure class="card-fill" style="padding:1.4vh 1vw;display:flex;flex-direction:column;gap:1vh;min-height:0">
+        <div class="frame-img r-1x1 fit-contain" style="background:var(--paper);max-height:20vh"><img src="images/08-refined-landscape.svg" data-image-slot="s15-grid-icon-1x1" alt="精修 SVG 输出"></div>
+        <figcaption class="t-body-sm"><strong>Output</strong><br/>场景图标</figcaption>
+      </figure>
+      <figure class="card-fill" style="padding:1.4vh 1vw;display:flex;flex-direction:column;gap:1vh;min-height:0">
+        <div class="frame-img r-1x1 fit-contain" style="background:var(--paper);max-height:20vh"><img src="images/08-refined-coffee.svg" data-image-slot="s15-grid-icon-1x1" alt="精修 SVG 输出"></div>
+        <figcaption class="t-body-sm"><strong>Output</strong><br/>生活物件图标</figcaption>
+      </figure>
+    </div>
+  </div>
+</section>
+
+<section class="slide" data-layout="S21" data-animate="tech-spec">
+  <div class="canvas-card">
+    <div class="chrome-min">
+      <div class="l">DEMO AND ARTIFACTS</div>
+      <div class="r">09 / 10</div>
+    </div>
+    <div data-anim="line" style="display:flex;flex-direction:column;gap:1.2vh">
+      <div class="t-cat">TECH SPEC SHEET</div>
+      <h2 class="h-xl-zh" style="font-size:min(5.4vw,9.8vh)">演示时看三件事</h2>
+    </div>
+    <div data-anim="up" style="display:grid;grid-template-columns:5fr 2fr 2fr 2fr;gap:2vw;margin-top:3vh;align-items:start">
+      <div>
+        <div style="font-family:var(--sans),var(--sans-zh);font-weight:200;font-size:min(5vw,8.6vh);line-height:.95;letter-spacing:-.025em">Web UI<br/>Live Graph</div>
+        <p class="t-body" style="max-width:38ch;margin-top:2vh">输入 prompt 后，运行页面会实时显示 Agent 状态、候选 SVG、改写 prompt、生成目标、trace 和 gallery。</p>
+      </div>
+      <div>
+        <div style="height:2px;background:var(--accent);margin-bottom:1.4vh"></div>
+        <div class="t-meta">COMMAND</div>
+        <div class="kpi-num" style="font-family:var(--sans);font-weight:200;font-size:min(4.8vw,8vh);line-height:.9">web.py</div>
+        <p class="t-body-sm">启动 Flask Web UI。</p>
+      </div>
+      <div>
+        <div style="height:2px;background:var(--ink);margin-bottom:1.4vh"></div>
+        <div class="t-meta">RUN MODE</div>
+        <div class="kpi-num" style="font-family:var(--sans);font-weight:200;font-size:min(4.8vw,8vh);line-height:.9">3×</div>
+        <p class="t-body-sm">collaborative candidate count。</p>
+      </div>
+      <div>
+        <div style="height:2px;background:var(--ink);margin-bottom:1.4vh"></div>
+        <div class="t-meta">LOCAL CHECK</div>
+        <div class="kpi-num" style="font-family:var(--sans);font-weight:200;font-size:min(4.8vw,8vh);line-height:.9">SVG</div>
+        <p class="t-body-sm">viewBox、标签、外链、颜色、安全。</p>
+      </div>
+    </div>
+    <div data-anim="hero" style="margin-top:auto;display:grid;grid-template-columns:4fr 5fr 3fr;gap:2vw;align-items:end">
+      <div class="bottom-hero" style="font-family:var(--sans);font-weight:200;font-size:min(8.2vw,13.5vh);line-height:.9;letter-spacing:-.045em;color:var(--accent)">9</div>
+      <div>
+        <div style="height:2px;background:var(--ink);margin-bottom:1.6vh"></div>
+        <p class="t-body">核心输出目录：`generation_goal.json`、`memory_context.json`、`llm_trace.json`、`failure_taxonomy.json`、`repair_routes.json`、`gallery.html`。</p>
+      </div>
+      <div data-anim="bars" style="height:18vh;display:grid;grid-template-columns:repeat(9,1fr);gap:.4vw;align-items:end">
+        <div class="vbar" style="height:28%;background:var(--grey-2)"></div>
+        <div class="vbar" style="height:46%;background:var(--grey-2)"></div>
+        <div class="vbar" style="height:61%;background:var(--accent)"></div>
+        <div class="vbar" style="height:38%;background:var(--grey-2)"></div>
+        <div class="vbar" style="height:78%;background:var(--ink)"></div>
+        <div class="vbar" style="height:55%;background:var(--grey-2)"></div>
+        <div class="vbar" style="height:88%;background:var(--accent)"></div>
+        <div class="vbar" style="height:42%;background:var(--grey-2)"></div>
+        <div class="vbar" style="height:70%;background:var(--ink)"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="slide split" data-layout="SWISS-CLOSING-ASCII" data-animate="split-statement">
+  <div class="canvas-card">
+    <div class="split-half">
+      <div class="half b-accent" style="padding:5.6vh 3.6vw 4.4vh;justify-content:space-between;position:relative;overflow:hidden">
+        <canvas class="ascii-bg" aria-hidden="true"></canvas>
+        <div class="chrome-min" style="margin-bottom:0;position:relative;z-index:1">
+          <div class="l">10 / 10</div>
+          <div class="r">CLOSING</div>
+        </div>
+        <div data-anim="manifesto" style="display:flex;flex-direction:column;gap:2vh;position:relative;z-index:1">
+          <div class="t-meta" style="color:rgba(255,255,255,.78);letter-spacing:.22em;margin-bottom:1.6vh">TAKEAWAY</div>
+          <h2 style="font-family:var(--sans),var(--sans-zh);font-size:min(7.2vw,12.6vh);line-height:.94;letter-spacing:-.025em;font-weight:200;color:#fff">让模型<br/>像团队一样<br/>工作</h2>
+          <div style="font-family:var(--sans),var(--sans-zh);font-size:max(16px,1.02vw);line-height:1.6;color:rgba(255,255,255,.84);font-weight:400;max-width:36ch;margin-top:1.4vh">本项目的重点不是“会画 SVG”，而是把图形生成变成可诊断、可选择、可修复、可积累经验的 Agent 流程。</div>
+        </div>
+        <div data-anim="signature" style="display:flex;justify-content:space-between;align-items:end;border-top:1px solid rgba(255,255,255,.22);padding-top:2vh;position:relative;z-index:1">
+          <div class="t-meta" style="color:rgba(255,255,255,.62)">github.com/fwar1nben/CG_PJ</div>
+          <div class="t-meta" style="color:rgba(255,255,255,.62)">END</div>
+        </div>
+      </div>
+      <div class="half" style="padding:5.2vh 3.4vw 4vh;justify-content:flex-start;gap:2.1vh">
+        <div class="chrome-min" style="margin-bottom:2.6vh">
+          <div class="l">TEAM / REFERENCES</div>
+          <div class="r">SUBMISSION READY</div>
+        </div>
+        <ul class="takeaway-list" style="list-style:none;display:flex;flex-direction:column;gap:1.25vh">
+          <li style="display:grid;grid-template-columns:4.8vw 1fr;gap:1.4vw;border-top:1px solid var(--border-subtle);padding-top:1.15vh">
+            <div style="font-family:var(--sans);font-weight:200;font-size:min(4.2vw,7vh);line-height:.9">01</div>
+            <div><h3 class="t-h-prod">人员分工</h3><p class="t-body-sm">姓名 / 学号待替换：架构、Agent、Web UI、实验报告、PPT。</p></div>
+          </li>
+          <li style="display:grid;grid-template-columns:4.8vw 1fr;gap:1.4vw;border-top:1px solid var(--border-subtle);padding-top:1.15vh">
+            <div style="font-family:var(--sans);font-weight:200;font-size:min(4.2vw,7vh);line-height:.9">02</div>
+            <div><h3 class="t-h-prod">参考与引用</h3><p class="t-body-sm">GenPilot、Paper2Poster、PosterForest、SVG、OpenRouter、Pillow。</p></div>
+          </li>
+          <li style="display:grid;grid-template-columns:4.8vw 1fr;gap:1.4vw;border-top:1px solid var(--border-subtle);border-bottom:2px solid var(--accent);padding:1.15vh 0">
+            <div style="font-family:var(--sans);font-weight:200;font-size:min(4.2vw,7vh);line-height:.9;color:var(--accent)">03</div>
+            <div><h3 class="t-h-prod" style="color:var(--accent)">提交材料</h3><p class="t-body-sm">英文报告 PDF、PPT、代码链接；zip 标题按说明填写。</p></div>
+          </li>
+        </ul>
+        <div class="t-meta" style="text-align:right;color:var(--text-helper);margin-top:auto">Q&A</div>
+      </div>
+    </div>
+  </div>
+</section>

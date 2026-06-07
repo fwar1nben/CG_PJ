@@ -1,0 +1,1 @@
+总体架构可以分三层看。左侧是 RAG 输入，Memory Retrieval Tool 从本地历史运行中检索相似经验，把成功策略和失败模式交给 Goal Manager。中间是主生成链路，Goal、Rewriter、Planner 和 Generator 逐步把用户提示词变成结构化计划和多个 SVG 草稿。右侧是协作和修复链路，两个 Critic 评审候选，Selector 选择 winner，Optimizer 改写 baseline，Validator 发现问题后再进入 Taxonomy、Router 和 Refiner 闭环。

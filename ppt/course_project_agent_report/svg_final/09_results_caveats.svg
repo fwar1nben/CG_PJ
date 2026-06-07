@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">
+  <rect x="0" y="0" width="1280" height="720" fill="#F8FAFC" />
+  <text x="56" y="72" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="36" font-weight="800" fill="#111827">当前结果：15 个 Web 样本，修复后全部有效</text>
+  <path fill="#DBEAFE" d="M64,96 H1216 A8,8 0 0 1 1224,104 V140 A8,8 0 0 1 1216,148 H64 A8,8 0 0 1 56,140 V104 A8,8 0 0 1 64,96 Z" />
+  <text x="78" y="129" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="18" fill="#111827">现有运行结果说明修复闭环能提高通过率和平均分，但样本来自多次 Web 单 prompt 运行，不等同于完整批量基准。</text>
+
+  <g id="kpis">
+    <path fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1.2" d="M86,184 H286 A10,10 0 0 1 296,194 V318 A10,10 0 0 1 286,328 H86 A10,10 0 0 1 76,318 V194 A10,10 0 0 1 86,184 Z" />
+    
+  <g transform="translate(104.0, 210.0) scale(1.3333333333333333)" fill="none" stroke="#1D4ED8" stroke-width="2">
+    <path d="M3 13a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v6a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1l0 -6" />
+    <path d="M15 9a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v10a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1l0 -10" />
+    <path d="M9 5a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v14a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1l0 -14" />
+    <path d="M4 20h14" />
+  </g>
+    <text x="104" y="270" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="44" font-weight="800" fill="#111827">15</text>
+    <text x="104" y="302" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="16" fill="#64748B">Web run samples</text>
+
+    <path fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1.2" d="M336,184 H536 A10,10 0 0 1 546,194 V318 A10,10 0 0 1 536,328 H336 A10,10 0 0 1 326,318 V194 A10,10 0 0 1 336,184 Z" />
+    
+  <g transform="translate(354.0, 210.0) scale(1.3333333333333333)" fill="none" stroke="#0F766E" stroke-width="2">
+    <path d="M12 3a12 12 0 0 0 8.5 3a12 12 0 0 1 -8.5 15a12 12 0 0 1 -8.5 -15a12 12 0 0 0 8.5 -3" />
+  </g>
+    <text x="354" y="270" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="44" font-weight="800" fill="#0F766E">13/15</text>
+    <text x="354" y="302" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="16" fill="#64748B">baseline valid</text>
+
+    <path fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1.2" d="M586,184 H786 A10,10 0 0 1 796,194 V318 A10,10 0 0 1 786,328 H586 A10,10 0 0 1 576,318 V194 A10,10 0 0 1 586,184 Z" />
+    
+  <g transform="translate(604.0, 210.0) scale(1.3333333333333333)" fill="none" stroke="#16A34A" stroke-width="2">
+    <path d="M5 12l5 5l10 -10" />
+  </g>
+    <text x="604" y="270" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="44" font-weight="800" fill="#16A34A">15/15</text>
+    <text x="604" y="302" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="16" fill="#64748B">refined valid</text>
+
+    <path fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1.2" d="M836,184 H1036 A10,10 0 0 1 1046,194 V318 A10,10 0 0 1 1036,328 H836 A10,10 0 0 1 826,318 V194 A10,10 0 0 1 836,184 Z" />
+    
+  <g transform="translate(854.0, 210.0) scale(1.3333333333333333)" fill="none" stroke="#F59E0B" stroke-width="2">
+    <path d="M20 11a8.1 8.1 0 0 0 -15.5 -2m-.5 -4v4h4" />
+    <path d="M4 13a8.1 8.1 0 0 0 15.5 2m.5 4v-4h-4" />
+  </g>
+    <text x="854" y="270" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="44" font-weight="800" fill="#F59E0B">3</text>
+    <text x="854" y="302" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="16" fill="#64748B">max repair rounds</text>
+  </g>
+
+  <g id="chartArea">
+    
+    <path fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1.2" d="M88,376 H744 A12,12 0 0 1 756,388 V568 A12,12 0 0 1 744,580 H88 A12,12 0 0 1 76,568 V388 A12,12 0 0 1 88,376 Z" />
+    <text x="108" y="416" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="22" font-weight="800" fill="#111827">有效率和平均分变化</text>
+    <line x1="120" y1="526" x2="708" y2="526" stroke="#CBD5E1" stroke-width="1.2" />
+    <text x="120" y="556" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="15" fill="#64748B">valid rate</text>
+    <path fill="#DBEAFE" d="M258,475 H430 A6,6 0 0 1 436,481 V501 A6,6 0 0 1 430,507 H258 A6,6 0 0 1 252,501 V481 A6,6 0 0 1 258,475 Z" />
+    <path fill="#1D4ED8" d="M258,475 H405 A6,6 0 0 1 411,481 V501 A6,6 0 0 1 405,507 H258 A6,6 0 0 1 252,501 V481 A6,6 0 0 1 258,475 Z" />
+    <text x="450" y="498" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="16" font-weight="800" fill="#111827">baseline 86.7%</text>
+    <path fill="#CCFBF1" d="M258,520 H430 A6,6 0 0 1 436,526 V546 A6,6 0 0 1 430,552 H258 A6,6 0 0 1 252,546 V526 A6,6 0 0 1 258,520 Z" />
+    <path fill="#16A34A" d="M258,520 H430 A6,6 0 0 1 436,526 V546 A6,6 0 0 1 430,552 H258 A6,6 0 0 1 252,546 V526 A6,6 0 0 1 258,520 Z" />
+    <text x="450" y="543" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="16" font-weight="800" fill="#111827">refined 100%</text>
+
+    <text x="120" y="460" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="15" fill="#64748B">avg score</text>
+    <path fill="#DBEAFE" d="M258,424 H430 A6,6 0 0 1 436,430 V450 A6,6 0 0 1 430,456 H258 A6,6 0 0 1 252,450 V430 A6,6 0 0 1 258,424 Z" />
+    <path fill="#1D4ED8" d="M258,424 H410 A6,6 0 0 1 416,430 V450 A6,6 0 0 1 410,456 H258 A6,6 0 0 1 252,450 V430 A6,6 0 0 1 258,424 Z" />
+    <text x="450" y="447" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="16" font-weight="800" fill="#111827">89.33 → 93.20</text>
+    <line x1="612" y1="424" x2="612" y2="552" stroke="#94A3B8" stroke-width="1" stroke-dasharray="4 5" />
+    <text x="612" y="572" text-anchor="middle" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="13" fill="#64748B">100%</text>
+  </g>
+
+  <g id="caveat">
+    <path fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1.2" d="M808,376 H1192 A12,12 0 0 1 1204,388 V568 A12,12 0 0 1 1192,580 H808 A12,12 0 0 1 796,568 V388 A12,12 0 0 1 808,376 Z" />
+    <path fill="#FEE2E2" d="M836,416 H870 A10,10 0 0 1 880,426 V460 A10,10 0 0 1 870,470 H836 A10,10 0 0 1 826,460 V426 A10,10 0 0 1 836,416 Z" />
+    
+  <g transform="translate(839.0, 429.0) scale(1.1666666666666667)" fill="none" stroke="#DC2626" stroke-width="2">
+    <path d="M12 9v4" />
+    <path d="M10.363 3.591l-8.106 13.534a1.914 1.914 0 0 0 1.636 2.871h16.214a1.914 1.914 0 0 0 1.636 -2.87l-8.106 -13.536a1.914 1.914 0 0 0 -3.274 0" />
+    <path d="M12 16h.01" />
+  </g>
+    <text x="900" y="438" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="22" font-weight="800" fill="#111827">边界说明</text>
+    <text fill="#111827" font-size="18" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" x="826" y="500">这些结果来自 outputs/web 下的 15 次样本运行。</text><text fill="#111827" font-size="18" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" x="826" y="532">它们证明修复链路可用，但不能替代完整、</text><text fill="#111827" font-size="18" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" x="826" y="564">固定 prompt 集合上的批量对比实验。</text></g>
+
+  <text x="56" y="674" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="12" fill="#94A3B8">Source: outputs/web/*/metrics.json; aggregation in current workspace</text>
+  <text x="1224" y="674" text-anchor="end" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="12" fill="#94A3B8">09</text>
+</svg>

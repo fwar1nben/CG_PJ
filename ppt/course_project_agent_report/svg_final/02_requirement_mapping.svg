@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">
+  <rect x="0" y="0" width="1280" height="720" fill="#F8FAFC" />
+  <text x="56" y="72" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="36" font-weight="800" fill="#111827">对齐 Project 3：Agent 不只是一次模型调用</text>
+  <path fill="#DBEAFE" d="M64,96 H1216 A8,8 0 0 1 1224,104 V140 A8,8 0 0 1 1216,148 H64 A8,8 0 0 1 56,140 V104 A8,8 0 0 1 64,96 Z" />
+  <text x="78" y="129" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="18" fill="#111827">项目对应课程说明里的 2D 生成与多 Agent 协作方向：把“图标生成”做成有状态、有工具、有反馈的系统。</text>
+
+  <g id="card-graphics">
+    <path fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1.2" d="M86,188 H414 A10,10 0 0 1 424,198 V538 A10,10 0 0 1 414,548 H86 A10,10 0 0 1 76,538 V198 A10,10 0 0 1 86,188 Z" />
+    <path fill="#1D4ED8" d="M80,188 H420 A4,4 0 0 1 424,192 V192 A4,4 0 0 1 420,196 H80 A4,4 0 0 1 76,192 V192 A4,4 0 0 1 80,188 Z" />
+    
+  <g transform="translate(104.0, 226.0) scale(1.9166666666666667)" fill="none" stroke="#1D4ED8" stroke-width="2">
+    <path d="M4 6a2 2 0 0 1 2 -2h2a2 2 0 0 1 2 2v1a2 2 0 0 1 -2 2h-2a2 2 0 0 1 -2 -2l0 -1" />
+    <path d="M4 15a2 2 0 0 1 2 -2h2a2 2 0 0 1 2 2v3a2 2 0 0 1 -2 2h-2a2 2 0 0 1 -2 -2l0 -3" />
+    <path d="M14 6a2 2 0 0 1 2 -2h2a2 2 0 0 1 2 2v12a2 2 0 0 1 -2 2h-2a2 2 0 0 1 -2 -2l0 -12" />
+  </g>
+    <text x="168" y="250" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="24" font-weight="800" fill="#111827">图形学对象</text>
+    <text fill="#111827" font-size="20" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" x="104" y="314"><tspan>输出不是位图，而是</tspan>
+      <tspan fill="#1D4ED8" font-weight="700">可编辑 SVG</tspan>
+      </text><text fill="#111827" font-size="20" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" x="104" y="348">需要满足 viewBox、路径、颜色、</text><text fill="#111827" font-size="20" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" x="104" y="382">可解析性和渲染安全。</text><path fill="#F8FAFC" stroke="#CBD5E1" stroke-width="1" d="M112,434 H388 A8,8 0 0 1 396,442 V502 A8,8 0 0 1 388,510 H112 A8,8 0 0 1 104,502 V442 A8,8 0 0 1 112,434 Z" />
+    <text x="124" y="466" font-family="Consolas, Courier New, monospace" font-size="16" fill="#64748B">baseline/*.svg</text>
+    <text x="124" y="494" font-family="Consolas, Courier New, monospace" font-size="16" fill="#64748B">refined/*.svg</text>
+  </g>
+
+  <g id="card-agent">
+    <path fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1.2" d="M476,188 H804 A10,10 0 0 1 814,198 V538 A10,10 0 0 1 804,548 H476 A10,10 0 0 1 466,538 V198 A10,10 0 0 1 476,188 Z" />
+    <path fill="#0F766E" d="M470,188 H810 A4,4 0 0 1 814,192 V192 A4,4 0 0 1 810,196 H470 A4,4 0 0 1 466,192 V192 A4,4 0 0 1 470,188 Z" />
+    
+  <g transform="translate(494.0, 226.0) scale(1.9166666666666667)" fill="none" stroke="#0F766E" stroke-width="2">
+    <path d="M5 18a2 2 0 1 0 4 0a2 2 0 1 0 -4 0" />
+    <path d="M5 6a2 2 0 1 0 4 0a2 2 0 1 0 -4 0" />
+    <path d="M15 6a2 2 0 1 0 4 0a2 2 0 1 0 -4 0" />
+    <path d="M7 8l0 8" />
+    <path d="M9 18h6a2 2 0 0 0 2 -2v-5" />
+    <path d="M14 14l3 -3l3 3" />
+  </g>
+    <text x="558" y="250" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="24" font-weight="800" fill="#111827">Agent 设计</text>
+    <text fill="#111827" font-size="20" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" x="494" y="314">Goal Manager、Rewriter、Planner、</text><text fill="#111827" font-size="20" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" x="494" y="348">Generator、Critic、Selector、</text><text fill="#111827" font-size="20" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" x="494" y="382">Validator、Router、Refiner 分工明确。</text><path fill="#CCFBF1" stroke="#CBD5E1" stroke-width="1" d="M502,434 H778 A8,8 0 0 1 786,442 V502 A8,8 0 0 1 778,510 H502 A8,8 0 0 1 494,502 V442 A8,8 0 0 1 502,434 Z" />
+    <text x="514" y="466" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="17" fill="#111827">每个 LLM Agent 只处理一个窄任务，</text>
+    <text x="514" y="494" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="17" fill="#111827">工具负责可验证检查。</text>
+  </g>
+
+  <g id="card-evidence">
+    <path fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1.2" d="M866,188 H1194 A10,10 0 0 1 1204,198 V538 A10,10 0 0 1 1194,548 H866 A10,10 0 0 1 856,538 V198 A10,10 0 0 1 866,188 Z" />
+    <path fill="#F59E0B" d="M860,188 H1200 A4,4 0 0 1 1204,192 V192 A4,4 0 0 1 1200,196 H860 A4,4 0 0 1 856,192 V192 A4,4 0 0 1 860,188 Z" />
+    
+  <g transform="translate(884.0, 226.0) scale(1.9166666666666667)" fill="none" stroke="#F59E0B" stroke-width="2">
+    <path d="M14 3v4a1 1 0 0 0 1 1h4" />
+    <path d="M11.5 21h-4.5a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2h7l5 5v5m-5 6h7m-3 -3l3 3l-3 3" />
+  </g>
+    <text x="948" y="250" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="24" font-weight="800" fill="#111827">交付证据</text>
+    <text fill="#111827" font-size="20" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" x="884" y="314">输出可复查：SVG、PNG、gallery、</text><text fill="#111827" font-size="20" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" x="884" y="348">metrics、trace、raw responses、</text><text fill="#111827" font-size="20" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" x="884" y="382">failure taxonomy 和 repair routes。</text><path fill="#FEF3C7" stroke="#CBD5E1" stroke-width="1" d="M892,434 H1168 A8,8 0 0 1 1176,442 V502 A8,8 0 0 1 1168,510 H892 A8,8 0 0 1 884,502 V442 A8,8 0 0 1 892,434 Z" />
+    <text x="904" y="466" font-family="Consolas, Courier New, monospace" font-size="16" fill="#64748B">metrics.json</text>
+    <text x="904" y="494" font-family="Consolas, Courier New, monospace" font-size="16" fill="#64748B">llm_trace.json</text>
+  </g>
+
+  <text x="56" y="674" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="12" fill="#94A3B8">Source: Project3说明.pdf, README.md, docs/report_notes.md</text>
+  <text x="1224" y="674" text-anchor="end" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="12" fill="#94A3B8">02</text>
+</svg>

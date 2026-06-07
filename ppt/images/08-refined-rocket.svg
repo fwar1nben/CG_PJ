@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <title>Rocket Launch</title>
+  <desc>A minimal upright rocket with a pointed nose cone, simple fins, and a dynamic layered flame.</desc>
+  <!-- Rocket body -->
+  <rect x="108" y="60" width="40" height="100" rx="4" fill="#E53935"/>
+  <!-- Nose cone -->
+  <polygon points="128,20 108,60 148,60" fill="#E53935"/>
+  <!-- Left fin -->
+  <polygon points="108,140 88,170 108,170" fill="#E53935"/>
+  <!-- Right fin -->
+  <polygon points="148,140 168,170 148,170" fill="#E53935"/>
+  <!-- Nozzle -->
+  <rect x="116" y="160" width="24" height="8" rx="2" fill="#B71C1C"/>
+  <!-- Outer flame -->
+  <path d="M116,168 Q104,196 128,236 Q152,196 140,168 Z" fill="#FF7043"/>
+  <!-- Inner flame -->
+  <path d="M120,168 Q114,191 128,221 Q142,191 136,168 Z" fill="#FFB74D"/>
+  <!-- Core flame -->
+  <path d="M124,168 Q120,184 128,206 Q136,184 132,168 Z" fill="#FFEB3B"/>
+</svg>

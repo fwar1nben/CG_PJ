@@ -1,0 +1,1 @@
+修复闭环的重点是先诊断，再修复。Validator 给出 score、valid 和 issue list，如果发现 warning 或 error，Failure Taxonomy 会把问题分类到语法安全、渲染、语义偏差、布局等类型。Repair Router 再选择路线，例如 safety rebuild、semantic recomposition 或 simplification。Refiner 最后拿到这些上下文，返回完整修复后的 SVG。现有样本里 coffee 从 70 分到 95 分，dog 从 65 分到 100 分，说明这个闭环不是摆设。

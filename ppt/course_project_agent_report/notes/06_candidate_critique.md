@@ -1,0 +1,1 @@
+生成阶段不是让模型一次性给答案，而是先生成多个候选。Multi-Candidate Generator 通常输出三个 SVG 草稿，Semantic Critic 关注语义对齐和小尺寸识别，SVG Quality Critic 关注可编辑性、安全性和渲染风险，并结合 SvgCheckTool 的机器检查结果。Consensus Selector 不是只给一个分数，它还会给下游 Optimizer 写 repair brief，所以选择过程是可以解释的。
