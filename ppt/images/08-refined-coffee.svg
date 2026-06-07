@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <title>Steaming Cup of Coffee</title>
+  <desc>A centered icon of a steaming coffee cup with a rounded brown body, curved handle on the right, and three wavy steam lines rising above.</desc>
+  <!-- Cup body -->
+  <path d="M68 96 C68 96, 68 200, 68 200 C68 216, 76 224, 92 224 L164 224 C180 224, 188 216, 188 200 L188 96 Z" fill="#6F4E37"/>
+  <!-- Cup rim -->
+  <ellipse cx="128" cy="96" rx="60" ry="14" fill="#D2B48C"/>
+  <!-- Coffee surface -->
+  <ellipse cx="128" cy="100" rx="52" ry="10" fill="#F5F5DC"/>
+  <!-- Handle -->
+  <path d="M188 120 C220 120, 220 180, 188 180" fill="none" stroke="#6F4E37" stroke-width="12" stroke-linecap="round"/>
+  <!-- Steam line 1 -->
+  <path d="M108 80 C104 60, 114 44, 108 24" fill="none" stroke="#D2B48C" stroke-width="6" stroke-linecap="round"/>
+  <!-- Steam line 2 -->
+  <path d="M128 76 C122 56, 134 40, 128 18" fill="none" stroke="#D2B48C" stroke-width="6" stroke-linecap="round"/>
+  <!-- Steam line 3 -->
+  <path d="M148 80 C142 60, 154 44, 148 24" fill="none" stroke="#D2B48C" stroke-width="6" stroke-linecap="round"/>
+</svg>

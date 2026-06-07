@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <title>Download cloud icon</title>
+  <desc>A compact cloud silhouette with a large centered downward arrow inside</desc>
+  <rect x="20" y="20" width="216" height="216" rx="40" fill="#E8F0FE"/>
+  <path d="M200 140c0-24-20-44-44-44-7 0-13 2-19 5-5-18-22-30-40-30-24 0-44 20-44 44 0 5 1 9 3 13-11 5-18 15-18 26 0 16 13 29 29 29h140c16 0 29-13 29-29 0-11-7-21-18-26 2-4 3-8 3-13z" fill="#4A90D9"/>
+  <path d="M116 90h24v55h20l-32 40-32-40h20z" fill="#FFFFFF"/>
+  <circle cx="128" cy="80" r="6" fill="#FFFFFF"/>
+</svg>
