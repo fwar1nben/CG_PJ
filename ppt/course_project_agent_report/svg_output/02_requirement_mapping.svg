@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">
+  <rect x="0" y="0" width="1280" height="720" fill="#F8FAFC"/>
+  <text x="56" y="72" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="36" font-weight="800" fill="#111827">对齐 Project 3：Agent 不只是一次模型调用</text>
+  <rect x="56" y="96" width="1168" height="52" rx="8" fill="#DBEAFE"/>
+  <text x="78" y="129" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="18" fill="#111827">项目对应课程说明里的 2D 生成与多 Agent 协作方向：把“图标生成”做成有状态、有工具、有反馈的系统。</text>
+
+  <g id="card-graphics">
+    <rect x="76" y="188" width="348" height="360" rx="10" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1.2"/>
+    <rect x="76" y="188" width="348" height="8" rx="4" fill="#1D4ED8"/>
+    <use data-icon="tabler-outline/layout" x="104" y="226" width="46" height="46" fill="#1D4ED8" stroke-width="2"/>
+    <text x="168" y="250" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="24" font-weight="800" fill="#111827">图形学对象</text>
+    <text x="104" y="314" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="20" fill="#111827">
+      <tspan x="104" dy="0">输出不是位图，而是</tspan>
+      <tspan fill="#1D4ED8" font-weight="700">可编辑 SVG</tspan>
+      <tspan x="104" dy="34">需要满足 viewBox、路径、颜色、</tspan>
+      <tspan x="104" dy="34">可解析性和渲染安全。</tspan>
+    </text>
+    <rect x="104" y="434" width="292" height="76" rx="8" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="1"/>
+    <text x="124" y="466" font-family="Consolas, Courier New, monospace" font-size="16" fill="#64748B">baseline/*.svg</text>
+    <text x="124" y="494" font-family="Consolas, Courier New, monospace" font-size="16" fill="#64748B">refined/*.svg</text>
+  </g>
+
+  <g id="card-agent">
+    <rect x="466" y="188" width="348" height="360" rx="10" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1.2"/>
+    <rect x="466" y="188" width="348" height="8" rx="4" fill="#0F766E"/>
+    <use data-icon="tabler-outline/git-branch" x="494" y="226" width="46" height="46" fill="#0F766E" stroke-width="2"/>
+    <text x="558" y="250" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="24" font-weight="800" fill="#111827">Agent 设计</text>
+    <text x="494" y="314" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="20" fill="#111827">
+      <tspan x="494" dy="0">Goal Manager、Rewriter、Planner、</tspan>
+      <tspan x="494" dy="34">Generator、Critic、Selector、</tspan>
+      <tspan x="494" dy="34">Validator、Router、Refiner 分工明确。</tspan>
+    </text>
+    <rect x="494" y="434" width="292" height="76" rx="8" fill="#CCFBF1" stroke="#CBD5E1" stroke-width="1"/>
+    <text x="514" y="466" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="17" fill="#111827">每个 LLM Agent 只处理一个窄任务，</text>
+    <text x="514" y="494" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="17" fill="#111827">工具负责可验证检查。</text>
+  </g>
+
+  <g id="card-evidence">
+    <rect x="856" y="188" width="348" height="360" rx="10" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1.2"/>
+    <rect x="856" y="188" width="348" height="8" rx="4" fill="#F59E0B"/>
+    <use data-icon="tabler-outline/file-export" x="884" y="226" width="46" height="46" fill="#F59E0B" stroke-width="2"/>
+    <text x="948" y="250" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="24" font-weight="800" fill="#111827">交付证据</text>
+    <text x="884" y="314" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="20" fill="#111827">
+      <tspan x="884" dy="0">输出可复查：SVG、PNG、gallery、</tspan>
+      <tspan x="884" dy="34">metrics、trace、raw responses、</tspan>
+      <tspan x="884" dy="34">failure taxonomy 和 repair routes。</tspan>
+    </text>
+    <rect x="884" y="434" width="292" height="76" rx="8" fill="#FEF3C7" stroke="#CBD5E1" stroke-width="1"/>
+    <text x="904" y="466" font-family="Consolas, Courier New, monospace" font-size="16" fill="#64748B">metrics.json</text>
+    <text x="904" y="494" font-family="Consolas, Courier New, monospace" font-size="16" fill="#64748B">llm_trace.json</text>
+  </g>
+
+  <text x="56" y="674" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="12" fill="#94A3B8">Source: Project3说明.pdf, README.md, docs/report_notes.md</text>
+  <text x="1224" y="674" text-anchor="end" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="12" fill="#94A3B8">02</text>
+</svg>

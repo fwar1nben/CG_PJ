@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">
+  <rect x="0" y="0" width="1280" height="720" fill="#F8FAFC"/>
+  <text x="56" y="72" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="36" font-weight="800" fill="#111827">RAG 在这里：本地运行记忆，而不是外部资料堆叠</text>
+  <rect x="56" y="96" width="1168" height="52" rx="8" fill="#CCFBF1"/>
+  <text x="78" y="129" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="18" fill="#111827">检索增强复用项目自己的成功和失败经验，帮助 Goal Manager 明确本次生成的目标、约束和验收标准。</text>
+
+  <g id="memory-record">
+    <rect x="76" y="184" width="492" height="404" rx="12" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1.2"/>
+    <text x="108" y="226" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="24" font-weight="800" fill="#111827">MemoryRecord 存什么</text>
+    <rect x="108" y="258" width="428" height="292" rx="10" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="1"/>
+    <text x="132" y="292" font-family="Consolas, Courier New, monospace" font-size="17" fill="#111827">id</text>
+    <text x="254" y="292" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="17" fill="#64748B">稳定哈希，避免重复写入</text>
+    <line x1="132" y1="312" x2="512" y2="312" stroke="#CBD5E1" stroke-width="1"/>
+    <text x="132" y="342" font-family="Consolas, Courier New, monospace" font-size="17" fill="#111827">prompt</text>
+    <text x="254" y="342" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="17" fill="#64748B">原始图标需求</text>
+    <line x1="132" y1="362" x2="512" y2="362" stroke="#CBD5E1" stroke-width="1"/>
+    <text x="132" y="392" font-family="Consolas, Courier New, monospace" font-size="17" fill="#111827">summary</text>
+    <text x="254" y="392" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="17" fill="#64748B">本次运行经验摘要</text>
+    <line x1="132" y1="412" x2="512" y2="412" stroke="#CBD5E1" stroke-width="1"/>
+    <text x="132" y="442" font-family="Consolas, Courier New, monospace" font-size="17" fill="#111827">patterns</text>
+    <text x="254" y="442" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="17" fill="#64748B">成功策略和失败模式</text>
+    <line x1="132" y1="462" x2="512" y2="462" stroke="#CBD5E1" stroke-width="1"/>
+    <text x="132" y="492" font-family="Consolas, Courier New, monospace" font-size="17" fill="#111827">score</text>
+    <text x="254" y="492" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="17" fill="#64748B">验证分数，用于后续判断</text>
+  </g>
+
+  <g id="rag-flow">
+    <rect x="636" y="184" width="568" height="404" rx="12" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1.2"/>
+    <text x="668" y="226" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="24" font-weight="800" fill="#111827">检索如何进入生成链路</text>
+
+    <rect x="680" y="268" width="140" height="74" rx="10" fill="#CCFBF1" stroke="#0F766E" stroke-width="1.2"/>
+    <use data-icon="tabler-outline/database" x="700" y="288" width="30" height="30" fill="#0F766E" stroke-width="2"/>
+    <text x="740" y="302" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="16" font-weight="800" fill="#111827">Index</text>
+    <text x="740" y="324" font-family="Consolas, Courier New, monospace" font-size="13" fill="#64748B">jsonl</text>
+
+    <line x1="820" y1="305" x2="884" y2="305" stroke="#0F766E" stroke-width="2.2"/>
+    <polygon points="884,305 872,298 872,312" fill="#0F766E"/>
+    <rect x="884" y="268" width="140" height="74" rx="10" fill="#CCFBF1" stroke="#0F766E" stroke-width="1.2"/>
+    <use data-icon="tabler-outline/search" x="904" y="288" width="30" height="30" fill="#0F766E" stroke-width="2"/>
+    <text x="944" y="302" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="16" font-weight="800" fill="#111827">BM25</text>
+    <text x="944" y="324" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="13" fill="#64748B">top-k memories</text>
+
+    <line x1="1024" y1="305" x2="1088" y2="305" stroke="#1D4ED8" stroke-width="2.2"/>
+    <polygon points="1088,305 1076,298 1076,312" fill="#1D4ED8"/>
+    <rect x="1088" y="268" width="88" height="74" rx="10" fill="#DBEAFE" stroke="#1D4ED8" stroke-width="1.2"/>
+    <use data-icon="tabler-outline/target" x="1118" y="286" width="28" height="28" fill="#1D4ED8" stroke-width="2"/>
+    <text x="1132" y="328" text-anchor="middle" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="14" font-weight="800" fill="#111827">Goal</text>
+
+    <rect x="680" y="404" width="496" height="122" rx="10" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="1"/>
+    <text x="710" y="438" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="20" font-weight="800" fill="#111827">Goal Manager 输出</text>
+    <text x="710" y="474" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="18" fill="#111827">
+      <tspan x="710" dy="0">objective / visual requirements / constraints / acceptance criteria</tspan>
+      <tspan x="710" dy="32">后续 Rewriter、Planner、Optimizer 都能引用同一套目标口径。</tspan>
+    </text>
+  </g>
+
+  <g id="why-it-matters">
+    <rect x="168" y="610" width="944" height="38" rx="8" fill="#DBEAFE"/>
+    <text x="640" y="635" text-anchor="middle" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="17" font-weight="700" fill="#111827">RAG 的作用不是“增加材料”，而是把历史失败变成下一次生成的可用约束。</text>
+  </g>
+
+  <text x="56" y="674" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="12" fill="#94A3B8">Source: svg_icon_agent/memory.py, svg_icon_agent/pipeline.py</text>
+  <text x="1224" y="674" text-anchor="end" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="12" fill="#94A3B8">05</text>
+</svg>

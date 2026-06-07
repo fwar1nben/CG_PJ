@@ -1,0 +1,1 @@
+这个项目和 Project 3 的对应关系主要有三点。第一，图形学对象是 SVG 图标，它要求 viewBox、路径、颜色和可编辑结构都能被检查。第二，Agent 不是一个名字，而是多个 LLM-backed Agent 分工完成窄任务。第三，项目输出不只是一张图片，还包括 SVG、PNG、gallery、metrics、trace、failure taxonomy 和 repair routes，这些文件能支撑复现和分析。

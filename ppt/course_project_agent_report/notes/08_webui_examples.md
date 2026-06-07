@@ -1,0 +1,1 @@
+Web UI 的作用是把 Agent 流程暴露出来。它显示每个节点 waiting、active、done、skipped 或 error 的状态，也显示 prompt rewrite、memory context、候选图、selected、baseline 和 refined 输出。右侧是我从项目生成结果里挑出的八个比较稳定的例子，覆盖对象、动物、场景、安全和 UI 类图标。选择标准不是分数最高就完事，而是轮廓清楚、放大后不乱、能代表不同 prompt 类型。

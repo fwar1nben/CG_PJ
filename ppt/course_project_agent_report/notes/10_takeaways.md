@@ -1,0 +1,1 @@
+最后总结三点。第一，RAG 记忆让历史经验进入目标设定。第二，多候选、双 Critic 和 Selector 让生成不完全依赖一次模型输出。第三，Validator、Taxonomy、Router 和 Refiner 让失败修复更具体。限制也很明确：系统依赖 LLM 服务质量，SVG 检查覆盖的是实用子集，当前实验规模还不够大。下一步应该做完整批量评测、人类偏好对比，并继续扩展 SVG grammar 和 repair route。

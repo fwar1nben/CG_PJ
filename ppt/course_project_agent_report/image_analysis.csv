@@ -1,0 +1,9 @@
+No,Filename,Width,Height,AspectRatio,PixelAspectRatio,RatioSource,UsageCount,DisplayRatioVariants,AssetKind,SvgRenderable,PptxNativeSupported,SizeKB,Category,ImageArea_SxS,TextArea_SxS
+1,gen_book.png,128,128,1.00,1.00,pixel,1,,bitmap,True,True,3.4,Near square,600x600,540x600
+2,gen_calendar.png,128,128,1.00,1.00,pixel,1,,bitmap,True,True,4.1,Near square,600x600,540x600
+3,gen_cloud.png,128,128,1.00,1.00,pixel,1,,bitmap,True,True,4.1,Near square,600x600,540x600
+4,gen_coffee.png,128,128,1.00,1.00,pixel,1,,bitmap,True,True,4.3,Near square,600x600,540x600
+5,gen_dog.png,128,128,1.00,1.00,pixel,1,,bitmap,True,True,5.3,Near square,600x600,540x600
+6,gen_landscape.png,128,128,1.00,1.00,pixel,1,,bitmap,True,True,2.7,Near square,600x600,540x600
+7,gen_rocket.png,128,128,1.00,1.00,pixel,1,,bitmap,True,True,2.3,Near square,600x600,540x600
+8,gen_shield.png,128,128,1.00,1.00,pixel,1,,bitmap,True,True,4.3,Near square,600x600,540x600

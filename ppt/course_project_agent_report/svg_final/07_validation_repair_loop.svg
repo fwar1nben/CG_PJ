@@ -1,0 +1,83 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">
+  <rect x="0" y="0" width="1280" height="720" fill="#F8FAFC" />
+  <text x="56" y="72" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="36" font-weight="800" fill="#111827">修复闭环：先诊断，再选择修复路线</text>
+  <path fill="#FEE2E2" d="M64,96 H1216 A8,8 0 0 1 1224,104 V140 A8,8 0 0 1 1216,148 H64 A8,8 0 0 1 56,140 V104 A8,8 0 0 1 64,96 Z" />
+  <text x="78" y="129" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="18" fill="#111827">Validator 发现问题后，系统不直接重试；Failure Taxonomy 先归因，Repair Router 再把问题翻译成 Refiner 的具体任务。</text>
+
+  <g id="loop-diagram">
+    <path fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1.2" d="M88,182 H684 A12,12 0 0 1 696,194 V600 A12,12 0 0 1 684,612 H88 A12,12 0 0 1 76,600 V194 A12,12 0 0 1 88,182 Z" />
+    <text x="108" y="224" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="24" font-weight="800" fill="#111827">Validation and Repair Loop</text>
+
+    <path fill="#DBEAFE" stroke="#1D4ED8" stroke-width="1.3" d="M152,282 H282 A10,10 0 0 1 292,292 V348 A10,10 0 0 1 282,358 H152 A10,10 0 0 1 142,348 V292 A10,10 0 0 1 152,282 Z" />
+    
+  <g transform="translate(164.0, 304.0) scale(1.25)" fill="none" stroke="#1D4ED8" stroke-width="2">
+    <path d="M12 3a12 12 0 0 0 8.5 3a12 12 0 0 1 -8.5 15a12 12 0 0 1 -8.5 -15a12 12 0 0 0 8.5 -3" />
+  </g>
+    <text x="206" y="314" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="17" font-weight="800" fill="#111827">Validator</text>
+    <text x="206" y="338" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="13" fill="#64748B">score + issues</text>
+
+    <line x1="292" y1="320" x2="362" y2="320" stroke="#DC2626" stroke-width="2.4" />
+    <polygon points="362,320 350,313 350,327" fill="#DC2626" />
+    <path fill="#FEE2E2" stroke="#DC2626" stroke-width="1.3" d="M372,282 H502 A10,10 0 0 1 512,292 V348 A10,10 0 0 1 502,358 H372 A10,10 0 0 1 362,348 V292 A10,10 0 0 1 372,282 Z" />
+    
+  <g transform="translate(384.0, 304.0) scale(1.25)" fill="none" stroke="#DC2626" stroke-width="2">
+    <path d="M12 9v4" />
+    <path d="M10.363 3.591l-8.106 13.534a1.914 1.914 0 0 0 1.636 2.871h16.214a1.914 1.914 0 0 0 1.636 -2.87l-8.106 -13.536a1.914 1.914 0 0 0 -3.274 0" />
+    <path d="M12 16h.01" />
+  </g>
+    <text x="426" y="314" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="17" font-weight="800" fill="#111827">Taxonomy</text>
+    <text x="426" y="338" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="13" fill="#64748B">failure type</text>
+
+    <line x1="512" y1="320" x2="582" y2="320" stroke="#DC2626" stroke-width="2.4" />
+    <polygon points="582,320 570,313 570,327" fill="#DC2626" />
+    <path fill="#FEE2E2" stroke="#DC2626" stroke-width="1.3" d="M592,282 H722 A10,10 0 0 1 732,292 V348 A10,10 0 0 1 722,358 H592 A10,10 0 0 1 582,348 V292 A10,10 0 0 1 592,282 Z" />
+    
+  <g transform="translate(604.0, 304.0) scale(1.25)" fill="none" stroke="#DC2626" stroke-width="2">
+    <path d="M3 19a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+    <path d="M19 7a2 2 0 1 0 0 -4a2 2 0 0 0 0 4" />
+    <path d="M11 19h5.5a3.5 3.5 0 0 0 0 -7h-8a3.5 3.5 0 0 1 0 -7h4.5" />
+  </g>
+    <text x="646" y="314" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="17" font-weight="800" fill="#111827">Router</text>
+    <text x="646" y="338" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="13" fill="#64748B">repair route</text>
+
+    <path d="M657 358 L657 444 L217 444 L217 358" fill="none" stroke="#DC2626" stroke-width="2.4" />
+    <polygon points="217,358 210,370 224,370" fill="#DC2626" />
+    <path fill="#FEF3C7" stroke="#F59E0B" stroke-width="1.3" d="M362,404 H512 A10,10 0 0 1 522,414 V474 A10,10 0 0 1 512,484 H362 A10,10 0 0 1 352,474 V414 A10,10 0 0 1 362,404 Z" />
+    
+  <g transform="translate(376.0, 428.0) scale(1.25)" fill="none" stroke="#F59E0B" stroke-width="2">
+    <path d="M3 21h4l13 -13a1.5 1.5 0 0 0 -4 -4l-13 13v4" />
+    <path d="M14.5 5.5l4 4" />
+    <path d="M12 8l-5 -5l-4 4l5 5" />
+    <path d="M7 8l-1.5 1.5" />
+    <path d="M16 12l5 5l-4 4l-5 -5" />
+    <path d="M16 17l-1.5 1.5" />
+  </g>
+    <text x="420" y="438" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="17" font-weight="800" fill="#111827">Refiner</text>
+    <text x="420" y="462" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="13" fill="#64748B">complete revised SVG</text>
+
+    <path fill="#F8FAFC" stroke="#CBD5E1" stroke-width="1" d="M152,508 H624 A8,8 0 0 1 632,516 V554 A8,8 0 0 1 624,562 H152 A8,8 0 0 1 144,554 V516 A8,8 0 0 1 152,508 Z" />
+    <text x="168" y="542" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="17" fill="#111827">最多迭代 3 轮；如果 Validator 通过，则 Taxonomy / Router / Refiner 被跳过。</text>
+  </g>
+
+  <g id="evidence">
+    <path fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1.2" d="M756,182 H1192 A12,12 0 0 1 1204,194 V600 A12,12 0 0 1 1192,612 H756 A12,12 0 0 1 744,600 V194 A12,12 0 0 1 756,182 Z" />
+    <text x="776" y="224" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="24" font-weight="800" fill="#111827">闭环带来的可见收益</text>
+    <g id="metric-1">
+      <path fill="#F8FAFC" stroke="#CBD5E1" stroke-width="1" d="M786,264 H956 A10,10 0 0 1 966,274 V370 A10,10 0 0 1 956,380 H786 A10,10 0 0 1 776,370 V274 A10,10 0 0 1 786,264 Z" />
+      <text x="802" y="296" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="16" fill="#64748B">coffee run</text>
+      <text x="802" y="342" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="44" font-weight="800" fill="#16A34A">70→95</text>
+      <text x="802" y="366" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="14" fill="#64748B">1 轮修复后通过</text>
+    </g>
+    <g id="metric-2">
+      <path fill="#F8FAFC" stroke="#CBD5E1" stroke-width="1" d="M996,264 H1166 A10,10 0 0 1 1176,274 V370 A10,10 0 0 1 1166,380 H996 A10,10 0 0 1 986,370 V274 A10,10 0 0 1 996,264 Z" />
+      <text x="1012" y="296" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="16" fill="#64748B">dog run</text>
+      <text x="1012" y="342" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="44" font-weight="800" fill="#16A34A">65→100</text>
+      <text x="1012" y="366" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="14" fill="#64748B">1 轮修复后满分</text>
+    </g>
+    <path fill="#FEE2E2" stroke="#DC2626" stroke-width="1" d="M786,416 H1166 A10,10 0 0 1 1176,426 V538 A10,10 0 0 1 1166,548 H786 A10,10 0 0 1 776,538 V426 A10,10 0 0 1 786,416 Z" />
+    <text x="804" y="452" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="20" font-weight="800" fill="#111827">为什么不是普通 retry</text>
+    <text fill="#111827" font-size="17" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" x="804" y="490">Taxonomy 保存失败类型、证据、优先级；</text><text fill="#111827" font-size="17" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" x="804" y="520">Router 生成路线和具体 brief；</text><text fill="#111827" font-size="17" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" x="804" y="550">Refiner 才拿到上下文返回完整 SVG。</text></g>
+
+  <text x="56" y="674" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="12" fill="#94A3B8">Source: outputs/web/*/metrics.json, svg_icon_agent/refiner.py</text>
+  <text x="1224" y="674" text-anchor="end" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="12" fill="#94A3B8">07</text>
+</svg>

@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">
+  <rect x="0" y="0" width="1280" height="720" fill="#F8FAFC"/>
+  <text x="56" y="72" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="36" font-weight="800" fill="#111827">候选竞争：三个草稿，两路评审，一个可解释选择</text>
+  <rect x="56" y="96" width="1168" height="52" rx="8" fill="#DBEAFE"/>
+  <text x="78" y="129" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="18" fill="#111827">Multi-Candidate Generator 降低单次输出偶然性；两个 Critic 分别评价“像不像”和“能不能安全导出”。</text>
+
+  <g id="generator">
+    <rect x="70" y="236" width="190" height="98" rx="12" fill="#DBEAFE" stroke="#1D4ED8" stroke-width="1.3"/>
+    <use data-icon="tabler-outline/layout" x="96" y="262" width="38" height="38" fill="#1D4ED8" stroke-width="2"/>
+    <text x="148" y="276" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="20" font-weight="800" fill="#111827">Generator</text>
+    <text x="148" y="306" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="15" fill="#64748B">生成 3 个 SVG 草稿</text>
+  </g>
+
+  <g id="candidates">
+    <line x1="260" y1="285" x2="322" y2="224" stroke="#1D4ED8" stroke-width="2.2"/>
+    <polygon points="322,224 309,228 319,237" fill="#1D4ED8"/>
+    <line x1="260" y1="285" x2="322" y2="285" stroke="#1D4ED8" stroke-width="2.2"/>
+    <polygon points="322,285 310,278 310,292" fill="#1D4ED8"/>
+    <line x1="260" y1="285" x2="322" y2="346" stroke="#1D4ED8" stroke-width="2.2"/>
+    <polygon points="322,346 319,333 309,342" fill="#1D4ED8"/>
+    <rect x="322" y="188" width="164" height="66" rx="10" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1.2"/>
+    <text x="404" y="216" text-anchor="middle" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="18" font-weight="800" fill="#111827">Candidate 1</text>
+    <text x="404" y="240" text-anchor="middle" font-family="Consolas, Courier New, monospace" font-size="13" fill="#64748B">candidate-1.svg</text>
+    <rect x="322" y="272" width="164" height="66" rx="10" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1.2"/>
+    <text x="404" y="300" text-anchor="middle" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="18" font-weight="800" fill="#111827">Candidate 2</text>
+    <text x="404" y="324" text-anchor="middle" font-family="Consolas, Courier New, monospace" font-size="13" fill="#64748B">candidate-2.svg</text>
+    <rect x="322" y="356" width="164" height="66" rx="10" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1.2"/>
+    <text x="404" y="384" text-anchor="middle" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="18" font-weight="800" fill="#111827">Candidate 3</text>
+    <text x="404" y="408" text-anchor="middle" font-family="Consolas, Courier New, monospace" font-size="13" fill="#64748B">candidate-3.svg</text>
+  </g>
+
+  <g id="critics">
+    <line x1="486" y1="305" x2="558" y2="242" stroke="#0F766E" stroke-width="2.2"/>
+    <polygon points="558,242 545,246 555,255" fill="#0F766E"/>
+    <line x1="486" y1="305" x2="558" y2="368" stroke="#0F766E" stroke-width="2.2"/>
+    <polygon points="558,368 555,355 545,364" fill="#0F766E"/>
+    <rect x="558" y="196" width="230" height="94" rx="12" fill="#CCFBF1" stroke="#0F766E" stroke-width="1.3"/>
+    <use data-icon="tabler-outline/search" x="586" y="224" width="34" height="34" fill="#0F766E" stroke-width="2"/>
+    <text x="634" y="234" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="19" font-weight="800" fill="#111827">Semantic Critic</text>
+    <text x="634" y="264" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="15" fill="#64748B">语义对齐、小尺寸识别</text>
+    <rect x="558" y="322" width="230" height="94" rx="12" fill="#CCFBF1" stroke="#0F766E" stroke-width="1.3"/>
+    <use data-icon="tabler-outline/shield" x="586" y="350" width="34" height="34" fill="#0F766E" stroke-width="2"/>
+    <text x="634" y="360" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="19" font-weight="800" fill="#111827">SVG Quality Critic</text>
+    <text x="634" y="390" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="15" fill="#64748B">可编辑、安全、渲染风险</text>
+  </g>
+
+  <g id="selector-optimizer">
+    <line x1="788" y1="243" x2="872" y2="305" stroke="#F59E0B" stroke-width="2.2"/>
+    <line x1="788" y1="369" x2="872" y2="305" stroke="#F59E0B" stroke-width="2.2"/>
+    <polygon points="872,305 859,300 860,314" fill="#F59E0B"/>
+    <rect x="872" y="250" width="150" height="110" rx="12" fill="#FEF3C7" stroke="#F59E0B" stroke-width="1.3"/>
+    <use data-icon="tabler-outline/check" x="918" y="272" width="34" height="34" fill="#F59E0B" stroke-width="2"/>
+    <text x="947" y="324" text-anchor="middle" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="20" font-weight="800" fill="#111827">Selector</text>
+    <text x="947" y="348" text-anchor="middle" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="14" fill="#64748B">winner + brief</text>
+    <line x1="1022" y1="305" x2="1082" y2="305" stroke="#F59E0B" stroke-width="2.2"/>
+    <polygon points="1082,305 1070,298 1070,312" fill="#F59E0B"/>
+    <rect x="1082" y="250" width="142" height="110" rx="12" fill="#FEF3C7" stroke="#F59E0B" stroke-width="1.3"/>
+    <use data-icon="tabler-outline/tools" x="1136" y="272" width="34" height="34" fill="#F59E0B" stroke-width="2"/>
+    <text x="1153" y="324" text-anchor="middle" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="20" font-weight="800" fill="#111827">Optimizer</text>
+    <text x="1153" y="348" text-anchor="middle" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="14" fill="#64748B">baseline SVG</text>
+  </g>
+
+  <g id="details">
+    <rect x="76" y="512" width="348" height="94" rx="10" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1"/>
+    <text x="104" y="546" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="18" font-weight="800" fill="#111827">输入</text>
+    <text x="104" y="576" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="16" fill="#64748B">结构化 IconPlan + 目标约束 + prompt rewrite</text>
+    <rect x="466" y="512" width="348" height="94" rx="10" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1"/>
+    <text x="494" y="546" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="18" font-weight="800" fill="#111827">评审</text>
+    <text x="494" y="576" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="16" fill="#64748B">LLM 语义判断 + SvgCheckTool 机器检查证据</text>
+    <rect x="856" y="512" width="348" height="94" rx="10" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1"/>
+    <text x="884" y="546" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="18" font-weight="800" fill="#111827">输出</text>
+    <text x="884" y="576" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="16" fill="#64748B">selected SVG、optimizer feedback source、baseline SVG</text>
+  </g>
+
+  <text x="56" y="674" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="12" fill="#94A3B8">Source: svg_icon_agent/llm_agents.py, tests/test_pipeline.py</text>
+  <text x="1224" y="674" text-anchor="end" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="12" fill="#94A3B8">06</text>
+</svg>

@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">
+  <rect x="0" y="0" width="1280" height="720" fill="#F8FAFC"/>
+  <rect x="56" y="54" width="1168" height="612" rx="18" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1.4"/>
+  <rect x="56" y="54" width="14" height="612" rx="7" fill="#0F766E"/>
+  <text x="112" y="126" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="44" font-weight="800" fill="#111827">结论：Agent 架构的价值在可控性</text>
+  <text x="116" y="172" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="22" fill="#64748B">项目把 SVG 生成从黑箱输出变成可追踪、可验证、可修复的流程。</text>
+
+  <g id="takeaways">
+    <text x="116" y="242" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="26" font-weight="800" fill="#1D4ED8">有效点</text>
+    <rect x="116" y="272" width="500" height="64" rx="10" fill="#DBEAFE"/>
+    <use data-icon="tabler-outline/database" x="140" y="289" width="30" height="30" fill="#1D4ED8" stroke-width="2"/>
+    <text x="184" y="311" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="19" fill="#111827">RAG 记忆让历史成功和失败进入下一次目标设定。</text>
+    <rect x="116" y="356" width="500" height="64" rx="10" fill="#DBEAFE"/>
+    <use data-icon="tabler-outline/git-branch" x="140" y="373" width="30" height="30" fill="#1D4ED8" stroke-width="2"/>
+    <text x="184" y="395" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="19" fill="#111827">候选竞争、双 Critic 和 Selector 降低单次输出偶然性。</text>
+    <rect x="116" y="440" width="500" height="64" rx="10" fill="#DBEAFE"/>
+    <use data-icon="tabler-outline/route" x="140" y="457" width="30" height="30" fill="#1D4ED8" stroke-width="2"/>
+    <text x="184" y="479" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="19" fill="#111827">失败先归因再路由，Refiner 获得更具体的修复任务。</text>
+  </g>
+
+  <g id="limitations">
+    <text x="680" y="242" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="26" font-weight="800" fill="#DC2626">限制</text>
+    <rect x="680" y="272" width="484" height="64" rx="10" fill="#FEE2E2"/>
+    <use data-icon="tabler-outline/cloud" x="704" y="289" width="30" height="30" fill="#DC2626" stroke-width="2"/>
+    <text x="748" y="311" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="19" fill="#111827">依赖 LLM 服务质量和 OpenRouter 排队情况。</text>
+    <rect x="680" y="356" width="484" height="64" rx="10" fill="#FEE2E2"/>
+    <use data-icon="tabler-outline/terminal" x="704" y="373" width="30" height="30" fill="#DC2626" stroke-width="2"/>
+    <text x="748" y="395" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="19" fill="#111827">渲染和检查覆盖的是实用 SVG 子集，不是完整规范。</text>
+    <rect x="680" y="440" width="484" height="64" rx="10" fill="#FEE2E2"/>
+    <use data-icon="tabler-outline/chart-bar" x="704" y="457" width="30" height="30" fill="#DC2626" stroke-width="2"/>
+    <text x="748" y="479" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="19" fill="#111827">当前实验样本规模有限，需要固定 prompt 集合批量评测。</text>
+  </g>
+
+  <g id="next">
+    <rect x="116" y="548" width="1048" height="56" rx="10" fill="#CCFBF1"/>
+    <use data-icon="tabler-outline/bulb" x="140" y="562" width="28" height="28" fill="#0F766E" stroke-width="2"/>
+    <text x="184" y="584" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="18" font-weight="700" fill="#111827">下一步：完整批量评测、人类偏好对比、扩展 SVG grammar、细化 repair route。</text>
+  </g>
+
+  <text x="116" y="628" font-family="Consolas, Courier New, monospace" font-size="15" fill="#64748B">outputs: selected SVG / refined SVG / PNG preview / metrics / traces / memory records</text>
+  <text x="1188" y="628" text-anchor="end" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="12" fill="#94A3B8">10</text>
+</svg>

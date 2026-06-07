@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">
+  <rect x="0" y="0" width="1280" height="720" fill="#F8FAFC" />
+  <text x="56" y="72" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="36" font-weight="800" fill="#111827">为什么选择 SVG 图标生成</text>
+  <path fill="#DBEAFE" d="M64,96 H1216 A8,8 0 0 1 1224,104 V140 A8,8 0 0 1 1216,148 H64 A8,8 0 0 1 56,140 V104 A8,8 0 0 1 64,96 Z" />
+  <text x="78" y="129" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="18" fill="#111827">小图标看似简单，但同时要求语义准确、轮廓清楚、结构可编辑、语法安全；这正适合拆成 Agent 工作流。</text>
+
+  <g id="problem-chain">
+    <path fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1.2" d="M88,180 H584 A12,12 0 0 1 596,192 V558 A12,12 0 0 1 584,570 H88 A12,12 0 0 1 76,558 V192 A12,12 0 0 1 88,180 Z" />
+    <text x="108" y="226" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="24" font-weight="800" fill="#111827">核心约束</text>
+    <g id="constraint-1">
+      <circle cx="124" cy="282" r="20" fill="#DBEAFE" />
+      <text x="124" y="289" text-anchor="middle" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="18" font-weight="800" fill="#1D4ED8">1</text>
+      <text x="162" y="276" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="20" font-weight="700" fill="#111827">输入短，但约束多</text>
+      <text x="162" y="306" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="16" fill="#64748B">对象、风格、尺寸、配色和可读性都要同时满足。</text>
+    </g>
+    <line x1="124" y1="306" x2="124" y2="342" stroke="#CBD5E1" stroke-width="2" />
+    <g id="constraint-2">
+      <circle cx="124" cy="366" r="20" fill="#CCFBF1" />
+      <text x="124" y="373" text-anchor="middle" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="18" font-weight="800" fill="#0F766E">2</text>
+      <text x="162" y="360" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="20" font-weight="700" fill="#111827">输出必须可编辑</text>
+      <text x="162" y="390" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="16" fill="#64748B">SVG 需要保留路径、形状、文本和调色空间。</text>
+    </g>
+    <line x1="124" y1="390" x2="124" y2="426" stroke="#CBD5E1" stroke-width="2" />
+    <g id="constraint-3">
+      <circle cx="124" cy="450" r="20" fill="#FEF3C7" />
+      <text x="124" y="457" text-anchor="middle" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="18" font-weight="800" fill="#F59E0B">3</text>
+      <text x="162" y="444" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="20" font-weight="700" fill="#111827">错误要能定位</text>
+      <text x="162" y="474" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="16" fill="#64748B">语义偏差、SVG 语法、外部引用、安全标签要分开处理。</text>
+    </g>
+  </g>
+
+  <g id="decision-panel">
+    <path fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1.2" d="M648,180 H1192 A12,12 0 0 1 1204,192 V558 A12,12 0 0 1 1192,570 H648 A12,12 0 0 1 636,558 V192 A12,12 0 0 1 648,180 Z" />
+    <text x="668" y="226" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="24" font-weight="800" fill="#111827">方案对比：文生图模型 vs SVG Agent</text>
+    <g id="t2i-comparison">
+      <path fill="#FEE2E2" stroke="#DC2626" stroke-width="1" d="M678,256 H894 A10,10 0 0 1 904,266 V464 A10,10 0 0 1 894,474 H678 A10,10 0 0 1 668,464 V266 A10,10 0 0 1 678,256 Z" />
+      <text x="694" y="292" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="20" font-weight="800" fill="#DC2626">文生图模型</text>
+      <text fill="#111827" font-size="16" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" x="694" y="326">输出：PNG/JPG 位图</text><text fill="#111827" font-size="16" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" x="694" y="356">编辑：局部修改成本高</text><text fill="#111827" font-size="16" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" x="694" y="386">检查：难定位形状错误</text><text fill="#111827" font-size="16" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" x="694" y="416">适合：写实或复杂视觉</text><polygon points="928,362 966,344 966,380" fill="#CBD5E1" />
+      <path fill="#CCFBF1" stroke="#0F766E" stroke-width="1" d="M1000,256 H1168 A10,10 0 0 1 1178,266 V464 A10,10 0 0 1 1168,474 H1000 A10,10 0 0 1 990,464 V266 A10,10 0 0 1 1000,256 Z" />
+      <text x="1014" y="292" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="20" font-weight="800" fill="#0F766E">SVG Agent</text>
+      <text fill="#111827" font-size="16" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" x="1014" y="326">输出：可编辑 SVG</text><text fill="#111827" font-size="16" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" x="1014" y="356">编辑：形状/颜色可调</text><text fill="#111827" font-size="16" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" x="1014" y="386">检查：语法和安全可测</text><text fill="#111827" font-size="16" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" x="1014" y="416">适合：图标和 UI 资产</text></g>
+    <g id="design-bullets">
+      
+  <g transform="translate(672.0, 506.0) scale(1.25)" fill="none" stroke="#1D4ED8" stroke-width="2">
+    <path d="M11 12a1 1 0 1 0 2 0a1 1 0 1 0 -2 0" />
+    <path d="M7 12a5 5 0 1 0 10 0a5 5 0 1 0 -10 0" />
+    <path d="M3 12a9 9 0 1 0 18 0a9 9 0 1 0 -18 0" />
+  </g>
+      <text x="718" y="529" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="18" fill="#111827">因此选择当前方案：把图标生成变成可验证的结构化任务。</text>
+      
+  <g transform="translate(672.0, 548.0) scale(1.25)" fill="none" stroke="#DC2626" stroke-width="2">
+    <path d="M12 3a12 12 0 0 0 8.5 3a12 12 0 0 1 -8.5 15a12 12 0 0 1 -8.5 -15a12 12 0 0 0 8.5 -3" />
+  </g>
+      <text x="718" y="571" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="18" fill="#111827">失败不靠“再抽一次”，而是进入诊断、路由和修复。</text>
+    </g>
+  </g>
+
+  <text x="56" y="674" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="12" fill="#94A3B8">Source: README.md, svg_icon_agent/pipeline.py, svg_icon_agent/refiner.py</text>
+  <text x="1224" y="674" text-anchor="end" font-family="Microsoft YaHei, PingFang SC, Arial, sans-serif" font-size="12" fill="#94A3B8">03</text>
+</svg>
